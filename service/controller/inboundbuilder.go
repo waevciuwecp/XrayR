@@ -99,30 +99,27 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 		protocol = "shadowsocks"
 		cipher := strings.ToLower(nodeInfo.CypherMethod)
 
-		proxySetting = &conf.ShadowsocksServerConfig{
+		ssConfig := &conf.ShadowsocksServerConfig{
 			Cipher:   cipher,
 			Password: nodeInfo.ServerKey, // shadowsocks2022 shareKey
 		}
-
-		proxySetting, _ := proxySetting.(*conf.ShadowsocksServerConfig)
 		// shadowsocks must have a random password
 		// shadowsocks2022's password == user PSK, thus should a length of string >= 32 and base64 encoder
 		b := make([]byte, 32)
 		rand.Read(b)
 		randPasswd := hex.EncodeToString(b)
 		if C.Contains(shadowaead_2022.List, cipher) {
-			proxySetting.Users = append(proxySetting.Users, &conf.ShadowsocksUserConfig{
+			ssConfig.Users = append(ssConfig.Users, &conf.ShadowsocksUserConfig{
 				Password: base64.StdEncoding.EncodeToString(b),
 			})
 		} else {
-			proxySetting.Password = randPasswd
+			ssConfig.Password = randPasswd
 		}
 
-		proxySetting.NetworkList = &conf.NetworkList{"tcp", "udp"}
-		proxySetting.IVCheck = true
-		if config.DisableIVCheck {
-			proxySetting.IVCheck = false
-		}
+		ssConfig.NetworkList = &conf.NetworkList{"tcp", "udp"}
+		// IVCheck is no longer user-configurable via ShadowsocksServerConfig;
+		// it defaults at the protobuf level in Xray-core v1.260327.0
+		proxySetting = ssConfig
 
 	case "dokodemo-door":
 		protocol = "dokodemo-door"
