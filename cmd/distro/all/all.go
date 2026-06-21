@@ -13,13 +13,16 @@ import (
 	// Default commander and all its services. This is an optional feature.
 	_ "github.com/xtls/xray-core/app/commander"
 	_ "github.com/xtls/xray-core/app/log/command"
+	_ "github.com/xtls/xray-core/app/observatory/command"
 	_ "github.com/xtls/xray-core/app/proxyman/command"
 	_ "github.com/xtls/xray-core/app/stats/command"
 
 	// Other optional features.
 	_ "github.com/xtls/xray-core/app/dns"
+	_ "github.com/xtls/xray-core/app/dns/fakedns"
 	_ "github.com/xtls/xray-core/app/log"
 	_ "github.com/xtls/xray-core/app/metrics"
+	_ "github.com/xtls/xray-core/app/observatory"
 	_ "github.com/xtls/xray-core/app/policy"
 	_ "github.com/xtls/xray-core/app/reverse"
 	_ "github.com/xtls/xray-core/app/router"
@@ -42,8 +45,14 @@ import (
 	_ "github.com/xtls/xray-core/proxy/vmess/outbound"
 	_ "github.com/xtls/xray-core/proxy/wireguard"
 
+	// Transport headers (srtp, tls, utp, wechat, wireguard removed in Xray-core v1.260327.0;
+	// now handled via transport/internet/finalmask/mkcp)
+	_ "github.com/xtls/xray-core/transport/internet/headers/http"
+	_ "github.com/xtls/xray-core/transport/internet/headers/noop"
+
 	// Transports
 	_ "github.com/xtls/xray-core/transport/internet/grpc"
+	_ "github.com/xtls/xray-core/transport/internet/httpupgrade"
 	_ "github.com/xtls/xray-core/transport/internet/kcp"
 	_ "github.com/xtls/xray-core/transport/internet/reality"
 	_ "github.com/xtls/xray-core/transport/internet/splithttp"
@@ -51,11 +60,6 @@ import (
 	_ "github.com/xtls/xray-core/transport/internet/tls"
 	_ "github.com/xtls/xray-core/transport/internet/udp"
 	_ "github.com/xtls/xray-core/transport/internet/websocket"
-
-	// Transport headers (srtp, tls, utp, wechat, wireguard removed in Xray-core v1.260327.0;
-	// now handled via transport/internet/finalmask/mkcp)
-	_ "github.com/xtls/xray-core/transport/internet/headers/http"
-	_ "github.com/xtls/xray-core/transport/internet/headers/noop"
 
 	// JSON & TOML & YAML
 	_ "github.com/xtls/xray-core/main/json"
