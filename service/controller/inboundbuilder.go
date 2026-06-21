@@ -145,8 +145,13 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 		if nodeInfo.ServerKey == "" {
 			return nil, fmt.Errorf("wireguard secret key is required")
 		}
+	case "Hysteria":
+		protocol = "hysteria"
+		proxySetting = &conf.HysteriaServerConfig{
+			Version: 2,
+		}
 	default:
-		return nil, fmt.Errorf("unsupported node type: %s, Only support: V2ray, Trojan, Shadowsocks, WireGuard, and Shadowsocks-Plugin", nodeInfo.NodeType)
+		return nil, fmt.Errorf("unsupported node type: %s, Only support: V2ray, Trojan, Shadowsocks, WireGuard, Hysteria, and Shadowsocks-Plugin", nodeInfo.NodeType)
 	}
 
 	setting, err := json.Marshal(proxySetting)
