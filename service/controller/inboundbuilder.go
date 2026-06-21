@@ -179,7 +179,6 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 		streamSetting.TCPSettings = tcpSetting
 	case "websocket":
 		headers := make(map[string]string)
-		headers["Host"] = nodeInfo.Host
 		wsSettings := &conf.WebSocketConfig{
 			AcceptProxyProtocol: config.EnableProxyProtocol,
 			Host:                nodeInfo.Host,
