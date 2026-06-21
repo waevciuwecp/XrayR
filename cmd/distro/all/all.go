@@ -45,6 +45,9 @@ import (
 	_ "github.com/xtls/xray-core/proxy/vmess/outbound"
 	_ "github.com/xtls/xray-core/proxy/wireguard"
 
+	// Experimental/optional proxies
+	_ "github.com/xtls/xray-core/proxy/tun"
+
 	// Transport headers (srtp, tls, utp, wechat, wireguard removed in Xray-core v1.260327.0;
 	// now handled via transport/internet/finalmask/mkcp)
 	_ "github.com/xtls/xray-core/transport/internet/headers/http"
@@ -55,6 +58,7 @@ import (
 	_ "github.com/xtls/xray-core/transport/internet/tagged/taggedimpl"
 
 	// Transports
+	_ "github.com/xtls/xray-core/transport/internet/browser_dialer"
 	_ "github.com/xtls/xray-core/transport/internet/grpc"
 	_ "github.com/xtls/xray-core/transport/internet/httpupgrade"
 	_ "github.com/xtls/xray-core/transport/internet/hysteria"
