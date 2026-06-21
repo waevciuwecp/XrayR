@@ -28,9 +28,9 @@ type CustomConfig struct {
 	VerifyCert     bool            `json:"verify_cert"`
 	Obfs           string          `json:"obfs"`
 	Header         json.RawMessage `json:"header"`
-	AllowInsecure  string          `json:"allow_insecure"`
+	AllowInsecure  string          `json:"allow_insecure"` // Removed in Xray-core v1.260327.0+; XrayR ignores this field
 	Servicename    string          `json:"servicename"`
-	EnableXtls     string          `json:"enable_xtls"`
+	EnableXtls     string          `json:"enable_xtls"`   // Removed in Xray-core v1.260327.0+ (Legacy XTLS); XrayR ignores this field
 	Flow           string          `json:"flow"`
 	EnableREALITY  bool            `json:"enable_reality"`
 	RealityOpts    *REALITYConfig  `json:"reality-opts"`
