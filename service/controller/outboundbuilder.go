@@ -10,14 +10,29 @@ import (
 	"github.com/XrayR-project/XrayR/api"
 )
 
-// OutboundBuilder build freedom outbound config for addOutbound
+// OutboundBuilder build freedom or loopback outbound config for addOutbound
 func OutboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.OutboundHandlerConfig, error) {
 	outboundDetourConfig := &conf.OutboundDetourConfig{}
-	outboundDetourConfig.Protocol = "freedom"
 	outboundDetourConfig.Tag = tag
 
 	// SendThrough setting
 	outboundDetourConfig.SendThrough = &config.SendIP
+
+	if nodeInfo.NodeType == "Loopback" {
+		outboundDetourConfig.Protocol = "loopback"
+		proxySetting := &conf.LoopbackConfig{
+			InboundTag: tag,
+		}
+		var setting json.RawMessage
+		setting, err := json.Marshal(proxySetting)
+		if err != nil {
+			return nil, fmt.Errorf("marshal loopback config failed: %s", err)
+		}
+		outboundDetourConfig.Settings = &setting
+		return outboundDetourConfig.Build()
+	}
+
+	outboundDetourConfig.Protocol = "freedom"
 
 	// Freedom Protocol setting
 	var domainStrategy = "Asis"
