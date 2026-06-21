@@ -56,6 +56,9 @@ type Config struct {
 	XHTTPNoSSEHeader    bool        `mapstructure:"XHTTPNoSSEHeader"`
 	XHTTPPaddingBytes   *Int32Range `mapstructure:"XHTTPPaddingBytes"`
 
+	// WebSocket extended fields
+	WSHeartbeatPeriod uint32 `mapstructure:"WSHeartbeatPeriod"`
+
 	// GRPC extended fields
 	GRPCMultiMode          bool   `mapstructure:"GRPCMultiMode"`
 	GRPCIdleTimeout        int32  `mapstructure:"GRPCIdleTimeout"`
@@ -63,6 +66,9 @@ type Config struct {
 	GRPCPermitWithoutStream bool  `mapstructure:"GRPCPermitWithoutStream"`
 	GRPCInitialWindowsSize int32  `mapstructure:"GRPCInitialWindowsSize"`
 	GRPCUserAgent          string `mapstructure:"GRPCUserAgent"`
+
+	// FinalMask JSON config (raw JSON matching Xray-core FinalMask structure)
+	FinalMaskJSON string `mapstructure:"FinalMaskJSON"`
 }
 
 type Int32Range struct {

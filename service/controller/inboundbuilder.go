@@ -179,6 +179,7 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 			Host:                nodeInfo.Host,
 			Path:                nodeInfo.Path,
 			Headers:             headers,
+			HeartbeatPeriod:     config.WSHeartbeatPeriod,
 		}
 		streamSetting.WSSettings = wsSettings
 	case "grpc":
@@ -333,6 +334,16 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 		}
 		streamSetting.SocketSettings = sockoptConfig
 	}
+
+	// FinalMask
+	if config.FinalMaskJSON != "" {
+		finalMask := &conf.FinalMask{}
+		if err := json.Unmarshal([]byte(config.FinalMaskJSON), finalMask); err != nil {
+			return nil, fmt.Errorf("parse FinalMaskJSON failed: %s", err)
+		}
+		streamSetting.FinalMask = finalMask
+	}
+
 	inboundDetourConfig.StreamSetting = streamSetting
 
 	return inboundDetourConfig.Build()
