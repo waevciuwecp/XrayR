@@ -80,6 +80,21 @@ func OutboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.
 			}
 		}
 	}
+	// Traffic noise injection
+	if config.NoiseType != "" {
+		noise := &conf.Noise{
+			Type:    config.NoiseType,
+			Packet:  config.NoisePacket,
+			ApplyTo: config.NoiseApplyTo,
+		}
+		if config.NoiseDelay > 0 {
+			noise.Delay = &conf.Int32Range{
+				From: 0,
+				To:   config.NoiseDelay,
+			}
+		}
+		proxySetting.Noises = append(proxySetting.Noises, noise)
+	}
 	// Used for Shadowsocks-Plugin
 	if nodeInfo.NodeType == "dokodemo-door" {
 		proxySetting.Redirect = fmt.Sprintf("127.0.0.1:%d", nodeInfo.Port-1)

@@ -150,8 +150,17 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 		proxySetting = &conf.HysteriaServerConfig{
 			Version: 2,
 		}
+	case "Socks", "SOCKS":
+		protocol = "socks"
+		proxySetting = &conf.SocksServerConfig{
+			AuthMethod: "noauth",
+			UDP:        true,
+		}
+	case "HTTP":
+		protocol = "http"
+		proxySetting = &conf.HTTPServerConfig{}
 	default:
-		return nil, fmt.Errorf("unsupported node type: %s, Only support: V2ray, Trojan, Shadowsocks, WireGuard, Hysteria, and Shadowsocks-Plugin", nodeInfo.NodeType)
+		return nil, fmt.Errorf("unsupported node type: %s, Only support: V2ray, Trojan, Shadowsocks, WireGuard, Hysteria, Socks, HTTP, and Shadowsocks-Plugin", nodeInfo.NodeType)
 	}
 
 	setting, err := json.Marshal(proxySetting)

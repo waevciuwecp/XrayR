@@ -81,6 +81,12 @@ type Config struct {
 	FragmentLength   *Int32Range `mapstructure:"FragmentLength"`
 	FragmentInterval *Int32Range `mapstructure:"FragmentInterval"`
 	FragmentMaxSplit *Int32Range `mapstructure:"FragmentMaxSplit"`
+
+	// Freedom Noises (traffic noise injection)
+	NoiseType    string `mapstructure:"NoiseType"`
+	NoisePacket  string `mapstructure:"NoisePacket"`
+	NoiseDelay   int32  `mapstructure:"NoiseDelay"`
+	NoiseApplyTo string `mapstructure:"NoiseApplyTo"`
 }
 
 type Int32Range struct {
