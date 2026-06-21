@@ -130,8 +130,17 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 			Host:        "v1.mux.cool",
 			NetworkList: []string{"tcp", "udp"},
 		}
+	case "WireGuard":
+		protocol = "wireguard"
+		proxySetting = &conf.WireGuardConfig{
+			SecretKey: nodeInfo.ServerKey,
+			MTU:       1420,
+		}
+		if nodeInfo.ServerKey == "" {
+			return nil, fmt.Errorf("wireguard secret key is required")
+		}
 	default:
-		return nil, fmt.Errorf("unsupported node type: %s, Only support: V2ray, Trojan, Shadowsocks, and Shadowsocks-Plugin", nodeInfo.NodeType)
+		return nil, fmt.Errorf("unsupported node type: %s, Only support: V2ray, Trojan, Shadowsocks, WireGuard, and Shadowsocks-Plugin", nodeInfo.NodeType)
 	}
 
 	setting, err := json.Marshal(proxySetting)
