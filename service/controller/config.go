@@ -24,6 +24,50 @@ type Config struct {
 	DisableLocalREALITYConfig bool                             `mapstructure:"DisableLocalREALITYConfig"`
 	EnableREALITY             bool                             `mapstructure:"EnableREALITY"`
 	REALITYConfigs            *REALITYConfig                   `mapstructure:"REALITYConfigs"`
+
+	// SniffingConfig extended fields
+	SniffingDomainsExcluded []string `mapstructure:"SniffingDomainsExcluded"`
+	SniffingMetadataOnly    bool     `mapstructure:"SniffingMetadataOnly"`
+	SniffingRouteOnly       bool     `mapstructure:"SniffingRouteOnly"`
+
+	// TLS extended fields
+	TLSFingerprint string `mapstructure:"TLSFingerprint"`
+	TLSAlpn        string `mapstructure:"TLSAlpn"`
+
+	// REALITY extended fields
+	REALITYFingerprint string `mapstructure:"REALITYFingerprint"`
+	REALITYSpiderX     string `mapstructure:"REALITYSpiderX"`
+	REALITYPublicKey   string `mapstructure:"REALITYPublicKey"`
+	REALITYShortId     string `mapstructure:"REALITYShortId"`
+
+	// SocketConfig extended fields
+	SOMark                uint32   `mapstructure:"SOMark"`
+	TCPFastOpen           bool     `mapstructure:"TCPFastOpen"`
+	TProxy                string   `mapstructure:"TProxy"`
+	DialerProxy           string   `mapstructure:"DialerProxy"`
+	BindInterface         string   `mapstructure:"BindInterface"`
+	TCPKeepAliveInterval  int32    `mapstructure:"TCPKeepAliveInterval"`
+	TCPCongestion         string   `mapstructure:"TCPCongestion"`
+	TrustedXForwardedFor  []string `mapstructure:"TrustedXForwardedFor"`
+
+	// XHTTP/SplitHTTP extended fields
+	XHTTPMode           string      `mapstructure:"XHTTPMode"`
+	XHTTPNoGRPCHeader   bool        `mapstructure:"XHTTPNoGRPCHeader"`
+	XHTTPNoSSEHeader    bool        `mapstructure:"XHTTPNoSSEHeader"`
+	XHTTPPaddingBytes   *Int32Range `mapstructure:"XHTTPPaddingBytes"`
+
+	// GRPC extended fields
+	GRPCMultiMode          bool   `mapstructure:"GRPCMultiMode"`
+	GRPCIdleTimeout        int32  `mapstructure:"GRPCIdleTimeout"`
+	GRPCHealthCheckTimeout int32  `mapstructure:"GRPCHealthCheckTimeout"`
+	GRPCPermitWithoutStream bool  `mapstructure:"GRPCPermitWithoutStream"`
+	GRPCInitialWindowsSize int32  `mapstructure:"GRPCInitialWindowsSize"`
+	GRPCUserAgent          string `mapstructure:"GRPCUserAgent"`
+}
+
+type Int32Range struct {
+	From int32 `mapstructure:"From"`
+	To   int32 `mapstructure:"To"`
 }
 
 type AutoSpeedLimitConfig struct {

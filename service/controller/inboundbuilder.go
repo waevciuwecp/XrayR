@@ -46,6 +46,12 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 	if config.DisableSniffing {
 		sniffingConfig.Enabled = false
 	}
+	if len(config.SniffingDomainsExcluded) > 0 {
+		sl := conf.StringList(config.SniffingDomainsExcluded)
+		sniffingConfig.DomainsExcluded = &sl
+	}
+	sniffingConfig.MetadataOnly = config.SniffingMetadataOnly
+	sniffingConfig.RouteOnly = config.SniffingRouteOnly
 	inboundDetourConfig.SniffingConfig = sniffingConfig
 
 	var (
@@ -177,8 +183,14 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 		streamSetting.WSSettings = wsSettings
 	case "grpc":
 		grpcSettings := &conf.GRPCConfig{
-			ServiceName: nodeInfo.ServiceName,
-			Authority:   nodeInfo.Authority,
+			ServiceName:         nodeInfo.ServiceName,
+			Authority:           nodeInfo.Authority,
+			MultiMode:           config.GRPCMultiMode,
+			IdleTimeout:         config.GRPCIdleTimeout,
+			HealthCheckTimeout:  config.GRPCHealthCheckTimeout,
+			PermitWithoutStream: config.GRPCPermitWithoutStream,
+			InitialWindowsSize:  config.GRPCInitialWindowsSize,
+			UserAgent:           config.GRPCUserAgent,
 		}
 		streamSetting.GRPCSettings = grpcSettings
 	case "httpupgrade":
@@ -191,8 +203,17 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 		streamSetting.HTTPUPGRADESettings = httpupgradeSettings
 	case "splithttp", "xhttp":
 		splithttpSetting := &conf.SplitHTTPConfig{
-			Path: nodeInfo.Path,
-			Host: nodeInfo.Host,
+			Path:          nodeInfo.Path,
+			Host:          nodeInfo.Host,
+			Mode:          config.XHTTPMode,
+			NoGRPCHeader:  config.XHTTPNoGRPCHeader,
+			NoSSEHeader:   config.XHTTPNoSSEHeader,
+		}
+		if config.XHTTPPaddingBytes != nil {
+			splithttpSetting.XPaddingBytes = conf.Int32Range{
+				From: config.XHTTPPaddingBytes.From,
+				To:   config.XHTTPPaddingBytes.To,
+			}
 		}
 		streamSetting.SplitHTTPSettings = splithttpSetting
 	case "hysteria":
@@ -214,7 +235,7 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 			streamSetting.Security = "reality"
 
 			r := nodeInfo.REALITYConfig
-			streamSetting.REALITYSettings = &conf.REALITYConfig{
+			realitySettings := &conf.REALITYConfig{
 				Show:         config.REALITYConfigs.Show,
 				Dest:         []byte(`"` + r.Dest + `"`),
 				Xver:         r.ProxyProtocolVer,
@@ -225,12 +246,25 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 				MaxTimeDiff:  r.MaxTimeDiff,
 				ShortIds:     r.ShortIds,
 			}
+			if config.REALITYFingerprint != "" {
+				realitySettings.Fingerprint = config.REALITYFingerprint
+			}
+			if config.REALITYSpiderX != "" {
+				realitySettings.SpiderX = config.REALITYSpiderX
+			}
+			if config.REALITYPublicKey != "" {
+				realitySettings.PublicKey = config.REALITYPublicKey
+			}
+			if config.REALITYShortId != "" {
+				realitySettings.ShortId = config.REALITYShortId
+			}
+			streamSetting.REALITYSettings = realitySettings
 		}
 	} else if config.EnableREALITY && config.REALITYConfigs != nil {
 		isREALITY = true
 		streamSetting.Security = "reality"
 
-		streamSetting.REALITYSettings = &conf.REALITYConfig{
+		realitySettings := &conf.REALITYConfig{
 			Show:         config.REALITYConfigs.Show,
 			Dest:         []byte(`"` + config.REALITYConfigs.Dest + `"`),
 			Xver:         config.REALITYConfigs.ProxyProtocolVer,
@@ -241,6 +275,19 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 			MaxTimeDiff:  config.REALITYConfigs.MaxTimeDiff,
 			ShortIds:     config.REALITYConfigs.ShortIds,
 		}
+		if config.REALITYFingerprint != "" {
+			realitySettings.Fingerprint = config.REALITYFingerprint
+		}
+		if config.REALITYSpiderX != "" {
+			realitySettings.SpiderX = config.REALITYSpiderX
+		}
+		if config.REALITYPublicKey != "" {
+			realitySettings.PublicKey = config.REALITYPublicKey
+		}
+		if config.REALITYShortId != "" {
+			realitySettings.ShortId = config.REALITYShortId
+		}
+		streamSetting.REALITYSettings = realitySettings
 	}
 
 	if !isREALITY && nodeInfo.EnableTLS && config.CertConfig.CertMode != "none" {
@@ -252,14 +299,37 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 		tlsSettings := &conf.TLSConfig{
 			RejectUnknownSNI: config.CertConfig.RejectUnknownSni,
 		}
+		if config.TLSFingerprint != "" {
+			tlsSettings.Fingerprint = config.TLSFingerprint
+		}
+		if config.TLSAlpn != "" {
+			alpnList := conf.StringList{config.TLSAlpn}
+			tlsSettings.ALPN = &alpnList
+		}
 		tlsSettings.Certs = append(tlsSettings.Certs, &conf.TLSCertConfig{CertFile: certFile, KeyFile: keyFile, OcspStapling: 3600})
 		streamSetting.TLSSettings = tlsSettings
 	}
 
-	// Support ProxyProtocol for any transport protocol
-	if networkType != "tcp" && networkType != "ws" && config.EnableProxyProtocol {
+	// SocketConfig
+	{
 		sockoptConfig := &conf.SocketConfig{
-			AcceptProxyProtocol: config.EnableProxyProtocol,
+			AcceptProxyProtocol:   config.EnableProxyProtocol,
+			Mark:                  int32(config.SOMark),
+			DialerProxy:           config.DialerProxy,
+			TCPKeepAliveInterval:  config.TCPKeepAliveInterval,
+			TCPCongestion:         config.TCPCongestion,
+		}
+		if config.BindInterface != "" {
+			sockoptConfig.Interface = config.BindInterface
+		}
+		if config.TProxy != "" {
+			sockoptConfig.TProxy = config.TProxy
+		}
+		if config.TCPFastOpen {
+			sockoptConfig.TFO = true
+		}
+		if len(config.TrustedXForwardedFor) > 0 {
+			sockoptConfig.TrustedXForwardedFor = config.TrustedXForwardedFor
 		}
 		streamSetting.SocketSettings = sockoptConfig
 	}
