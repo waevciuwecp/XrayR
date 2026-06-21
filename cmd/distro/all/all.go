@@ -50,6 +50,10 @@ import (
 	_ "github.com/xtls/xray-core/transport/internet/headers/http"
 	_ "github.com/xtls/xray-core/transport/internet/headers/noop"
 
+	// taggedimpl fixes dependency cycle in internet package;
+	// required for tag-based outbound routing to function
+	_ "github.com/xtls/xray-core/transport/internet/tagged/taggedimpl"
+
 	// Transports
 	_ "github.com/xtls/xray-core/transport/internet/grpc"
 	_ "github.com/xtls/xray-core/transport/internet/httpupgrade"
