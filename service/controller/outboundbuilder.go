@@ -18,6 +18,16 @@ func OutboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.
 	// SendThrough setting
 	outboundDetourConfig.SendThrough = &config.SendIP
 
+	// MuxConfig (multiplexing)
+	if config.MuxEnabled {
+		outboundDetourConfig.MuxSettings = &conf.MuxConfig{
+			Enabled:         config.MuxEnabled,
+			Concurrency:     config.MuxConcurrency,
+			XudpConcurrency: config.MuxXudpConcurrency,
+			XudpProxyUDP443: config.MuxXudpProxyUDP443,
+		}
+	}
+
 	if nodeInfo.NodeType == "Loopback" {
 		outboundDetourConfig.Protocol = "loopback"
 		proxySetting := &conf.LoopbackConfig{
@@ -45,6 +55,30 @@ func OutboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.
 	}
 	proxySetting := &conf.FreedomConfig{
 		DomainStrategy: domainStrategy,
+	}
+	// TCP Fragment for anti-censorship
+	if config.FragmentPackets != "" {
+		proxySetting.Fragment = &conf.Fragment{
+			Packets: config.FragmentPackets,
+		}
+		if config.FragmentLength != nil {
+			proxySetting.Fragment.Length = &conf.Int32Range{
+				From: config.FragmentLength.From,
+				To:   config.FragmentLength.To,
+			}
+		}
+		if config.FragmentInterval != nil {
+			proxySetting.Fragment.Interval = &conf.Int32Range{
+				From: config.FragmentInterval.From,
+				To:   config.FragmentInterval.To,
+			}
+		}
+		if config.FragmentMaxSplit != nil {
+			proxySetting.Fragment.MaxSplit = &conf.Int32Range{
+				From: config.FragmentMaxSplit.From,
+				To:   config.FragmentMaxSplit.To,
+			}
+		}
 	}
 	// Used for Shadowsocks-Plugin
 	if nodeInfo.NodeType == "dokodemo-door" {

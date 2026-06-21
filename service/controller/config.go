@@ -69,6 +69,18 @@ type Config struct {
 
 	// FinalMask JSON config (raw JSON matching Xray-core FinalMask structure)
 	FinalMaskJSON string `mapstructure:"FinalMaskJSON"`
+
+	// MuxConfig (multiplexing)
+	MuxEnabled         bool   `mapstructure:"MuxEnabled"`
+	MuxConcurrency     int16  `mapstructure:"MuxConcurrency"`
+	MuxXudpConcurrency int16  `mapstructure:"MuxXudpConcurrency"`
+	MuxXudpProxyUDP443 string `mapstructure:"MuxXudpProxyUDP443"`
+
+	// Freedom Fragment (TCP fragmentation for anti-censorship)
+	FragmentPackets  string      `mapstructure:"FragmentPackets"`
+	FragmentLength   *Int32Range `mapstructure:"FragmentLength"`
+	FragmentInterval *Int32Range `mapstructure:"FragmentInterval"`
+	FragmentMaxSplit *Int32Range `mapstructure:"FragmentMaxSplit"`
 }
 
 type Int32Range struct {
