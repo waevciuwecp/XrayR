@@ -158,6 +158,15 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 
 	// Build streamSettings
 	streamSetting = new(conf.StreamConfig)
+
+	// Validate against removed transport protocols (Xray-core v1.260327.0+)
+	switch strings.ToLower(nodeInfo.TransportProtocol) {
+	case "h2", "h3", "http":
+		return nil, fmt.Errorf("transport protocol %q was removed in Xray-core; use splithttp/xhttp stream-one H2/H3 instead", nodeInfo.TransportProtocol)
+	case "quic":
+		return nil, fmt.Errorf("transport protocol %q was removed in Xray-core; use splithttp/xhttp stream-one H3 instead", nodeInfo.TransportProtocol)
+	}
+
 	transportProtocol := conf.TransportProtocol(nodeInfo.TransportProtocol)
 	networkType, err := transportProtocol.Build()
 	if err != nil {
