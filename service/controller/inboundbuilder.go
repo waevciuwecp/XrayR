@@ -164,6 +164,12 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 		return nil, fmt.Errorf("convert TransportProtocol failed: %s", err)
 	}
 
+	// Xray-core deprecation/removal notes (v1.260327.0+):
+	// - REMOVED (Build() returns error): h2, h3, http, quic, xtls
+	// - DEPRECATED (warning, use XHTTP instead): grpc, websocket, httpupgrade
+	// - DEPRECATED protocols (warning, use VLESS instead): vmess, trojan, shadowsocks
+	// - KCP HeaderConfig/Seed REMOVED; TLS AllowInsecure REMOVED
+	// - See Xray-core infra/conf/transport_internet.go Build() for details
 	switch networkType {
 	case "tcp":
 		tcpSetting := &conf.TCPConfig{
