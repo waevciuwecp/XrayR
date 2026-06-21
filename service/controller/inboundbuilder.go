@@ -186,6 +186,14 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 			Host: nodeInfo.Host,
 		}
 		streamSetting.SplitHTTPSettings = splithttpSetting
+	case "hysteria":
+		hysteriaSettings := &conf.HysteriaConfig{
+			Version: 2,
+		}
+		streamSetting.HysteriaSettings = hysteriaSettings
+	case "mkcp", "kcp":
+		kcpSettings := &conf.KCPConfig{}
+		streamSetting.KCPSettings = kcpSettings
 	}
 	streamSetting.Network = &transportProtocol
 
