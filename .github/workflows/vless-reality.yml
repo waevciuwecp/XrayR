@@ -32,6 +32,6 @@ jobs:
           go mod tidy
           go list -m github.com/xtls/xray-core
       - name: Verify panel and core contracts
-        run: go test -p 2 ./api/newV2board ./service/controller -run 'TestVless(PanelContract|InboundContract|PanelRealityWithoutLocalConfig)$' -count=1 -timeout=2m
+        run: go test -p 2 ./common ./app/mydispatcher ./api/newV2board ./service/controller -run 'TestVless(PanelContract|InboundContract|PanelRealityWithoutLocalConfig)$|Test(CompatibleCounter|ExcludedDomain)$' -count=1 -timeout=2m
       - name: Build service
         run: go build -p 2 ./...

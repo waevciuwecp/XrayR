@@ -15,6 +15,7 @@ import (
 	"github.com/xtls/xray-core/transport"
 
 	"github.com/XrayR-project/XrayR/api"
+	xcommon "github.com/XrayR-project/XrayR/common"
 	"github.com/XrayR-project/XrayR/common/limiter"
 )
 
@@ -101,10 +102,10 @@ func (c *Controller) addUsers(users []*protocol.User, tag string) error {
 		// Pre-register per-user traffic counters so core can increment them (downlink/uplink)
 		uName := "user>>>" + mUser.Email + ">>>traffic>>>uplink"
 		dName := "user>>>" + mUser.Email + ">>>traffic>>>downlink"
-		if _, _ = stats.GetOrRegisterCounter(c.stm, uName); true {
+		if _, _ = xcommon.GetOrRegisterCounter(c.stm, uName); true {
 			// no-op
 		}
-		if _, _ = stats.GetOrRegisterCounter(c.stm, dName); true {
+		if _, _ = xcommon.GetOrRegisterCounter(c.stm, dName); true {
 			// no-op
 		}
 	}

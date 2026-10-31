@@ -28,6 +28,7 @@ func TestVlessInboundContract(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			node := &api.NodeInfo{NodeType: "Vless", NodeID: 42, Port: 443, TransportProtocol: "tcp", Decryption: tc.decryption}
 			cfg := &Config{EnableFallback: tc.fallback, CertConfig: &mylego.CertConfig{CertMode: "none"}}
+			cfg.FallBackConfigs = []*FallBackConfig{{Dest: "127.0.0.1:8080"}}
 			result, err := InboundBuilder(cfg, node, "contract")
 			if tc.invalid {
 				if err == nil {
