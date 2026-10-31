@@ -150,7 +150,7 @@ func (c *Controller) Start() error {
 	)
 
 	// Check cert service in need
-	if c.nodeInfo.EnableTLS && c.config.EnableREALITY == false {
+	if c.needsCertificateRenewal() {
 		c.tasks = append(c.tasks, periodicTask{
 			tag: "cert monitor",
 			Periodic: &task.Periodic{
@@ -618,12 +618,12 @@ func (c *Controller) buildNodeTag() string {
 
 // Check Cert
 func (c *Controller) certMonitor() error {
-	if c.nodeInfo.EnableTLS && c.config.EnableREALITY == false {
+	if c.needsCertificateRenewal() {
 		switch c.config.CertConfig.CertMode {
 		case "dns", "http", "tls":
 			lego, err := mylego.New(c.config.CertConfig)
 			if err != nil {
-				c.logger.Print(err)
+				return fmt.Errorf("initialize certificate renewal: %w", err)
 			}
 			// Xray-core supports the OcspStapling certification hot renew
 			_, _, _, err = lego.RenewCert()
@@ -633,4 +633,22 @@ func (c *Controller) certMonitor() error {
 		}
 	}
 	return nil
+}
+
+func (c *Controller) needsCertificateRenewal() bool {
+	if c.nodeInfo == nil || !c.nodeInfo.EnableTLS || c.config.CertConfig == nil {
+		return false
+	}
+	if c.config.DisableLocalREALITYConfig {
+		if c.nodeInfo.EnableREALITY && c.nodeInfo.REALITYConfig != nil {
+			return false
+		}
+	} else if c.config.EnableREALITY && c.config.REALITYConfigs != nil {
+		return false
+	}
+	switch c.config.CertConfig.CertMode {
+	case "dns", "http", "tls":
+		return true
+	}
+	return false
 }

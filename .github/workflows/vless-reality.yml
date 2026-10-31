@@ -34,7 +34,7 @@ jobs:
           go mod tidy
           go list -m github.com/xtls/xray-core
       - name: Verify panel and core contracts
-        run: go test -p 2 ./app/mydispatcher ./common/limiter ./api/newV2board ./service/controller ./panel -run 'Test(Vless|RealityOptions|XHTTPExtra|TrafficAcknowledgement|SniffFragmentedHeaders|CachedReaderError|RateReader|DispatcherLinkAccounting|OverrideExclusions|MissingTLSConfig|FreedomFinalRules|ControllerStartRejectsFallback|PanelStartupRollback|StatsWriter)' -count=1 -timeout=2m
+        run: go test -p 2 ./app/mydispatcher ./common/limiter ./api/newV2board ./service/controller ./panel -run 'Test(Vless|RealityOptions|XHTTPExtra|TrafficAcknowledgement|SniffFragmentedHeaders|CachedReaderError|RateReader|DispatcherLinkAccounting|OverrideExclusions|MissingTLSConfig|FreedomFinalRules|ControllerStartRejectsFallback|PanelStartupRollback|StatsWriter|CertificateMonitorReality)' -count=1 -timeout=2m
       - name: Check concurrent accounting and link cancellation
         if: matrix.core == 'locked'
         env:

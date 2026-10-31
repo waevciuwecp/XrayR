@@ -13,6 +13,8 @@ feature. Restarting with a mismatched subscription cannot fix a handshake.
 Node setup errors now propagate as ordinary errors and failed panel startup closes
 controllers and the core. Startup still fails on invalid node configuration; it
 neither silently skips nodes nor changes their encryption or fallback settings.
+Certificate renewal uses the same local/panel REALITY selection as inbound
+building and skips REALITY, static certificates and missing certificate configs.
 Other legacy configuration loaders may still panic on unrelated invalid inputs.
 
 ## Mapping and new options
