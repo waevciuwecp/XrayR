@@ -130,6 +130,7 @@ func TestVlessLoopback(t *testing.T) {
 		{name: "tcp", network: "tcp"},
 		{name: "tcp-encryption", network: "tcp", encrypted: true},
 		{name: "vision-reality", network: "tcp", reality: true, vision: true},
+		{name: "vision-reality-encryption", network: "tcp", reality: true, vision: true, encrypted: true},
 		{name: "vision-reality-mldsa65", network: "tcp", reality: true, vision: true, mldsa: true},
 		{name: "xhttp", network: "xhttp"},
 		{name: "xhttp-reality-encryption", network: "xhttp", reality: true, encrypted: true},

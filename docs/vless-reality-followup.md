@@ -102,7 +102,7 @@ including composite FakeDNS route-only handling and cancellation propagation.
 Targeted tests include config propagation and rejection, concurrent report
 acknowledgement, cancellation/online cleanup, second-device rejection, fragmented
 headers with byte preservation, and failed-start cleanup. Real core client/server
-loopback tests cover TCP, Encryption, Vision+REALITY, Vision+REALITY+ML-DSA-65,
+loopback tests cover TCP, Encryption, Vision+REALITY, Vision+REALITY+ML-DSA-65, Vision+REALITY+Encryption,
 XHTTP, and XHTTP+REALITY+Encryption; both direction counters must match payload
 length exactly. Everything uses ephemeral local keys and loopback services.
 
