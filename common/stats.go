@@ -3,7 +3,10 @@ package common
 import "github.com/xtls/xray-core/features/stats"
 
 // GetOrRegisterCounter supports both the locked core and its newer atomic API.
-func GetOrRegisterCounter(manager stats.Manager, name string) (stats.Counter, error) {
+func GetOrRegisterCounter(manager interface {
+	GetCounter(string) stats.Counter
+	RegisterCounter(string) (stats.Counter, error)
+}, name string) (stats.Counter, error) {
 	if atomic, ok := manager.(interface {
 		GetOrRegisterCounter(string) (stats.Counter, error)
 	}); ok {

@@ -13,7 +13,6 @@ func (c *counter) Set(v int64) int64 { old := *c; *c = counter(v); return int64(
 func (c *counter) Add(v int64) int64 { *c += counter(v); return int64(*c) }
 
 type legacyManager struct {
-	stats.Manager
 	value         stats.Counter
 	race          bool
 	fail          bool
