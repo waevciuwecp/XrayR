@@ -8,6 +8,7 @@ import (
 	"github.com/XrayR-project/XrayR/api"
 	"github.com/XrayR-project/XrayR/common/mylego"
 	. "github.com/XrayR-project/XrayR/service/controller"
+	"github.com/xtls/xray-core/app/proxyman"
 	vlessin "github.com/xtls/xray-core/proxy/vless/inbound"
 )
 
@@ -65,5 +66,22 @@ func TestVlessPanelRealityWithoutLocalConfig(t *testing.T) {
 	cfg := &Config{DisableLocalREALITYConfig: true, CertConfig: &mylego.CertConfig{CertMode: "none"}}
 	if _, err := InboundBuilder(cfg, node, "reality"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestVlessSniffingConfig(t *testing.T) {
+	node := &api.NodeInfo{NodeType: "Vless", Port: 443, TransportProtocol: "tcp"}
+	cfg := &Config{CertConfig: &mylego.CertConfig{CertMode: "none"}, SniffingDomainsExcluded: []string{"full:example.com"}, SniffingMetadataOnly: true, SniffingRouteOnly: true}
+	result, err := InboundBuilder(cfg, node, "sniffing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	message, err := result.ReceiverSettings.GetInstance()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sniffing := message.(*proxyman.ReceiverConfig).SniffingSettings
+	if !sniffing.Enabled || !sniffing.MetadataOnly || !sniffing.RouteOnly || len(sniffing.DomainsExcluded) != 1 || len(sniffing.DestinationOverride) != 4 {
+		t.Fatal("sniffing options lost during core config conversion")
 	}
 }

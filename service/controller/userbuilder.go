@@ -169,9 +169,6 @@ func cipherFromString(c string) shadowsocks.CipherType {
 		return shadowsocks.CipherType_CHACHA20_POLY1305
 	case "xchacha20-poly1305", "aead_xchacha20_poly1305", "xchacha20-ietf-poly1305":
 		return shadowsocks.CipherType_XCHACHA20_POLY1305
-	case "none", "plain":
-		// Newer cores remove NONE; an absent enum maps to UNKNOWN.
-		return shadowsocks.CipherType(shadowsocks.CipherType_value["NONE"])
 	default:
 		return shadowsocks.CipherType_UNKNOWN
 	}

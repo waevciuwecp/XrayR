@@ -39,20 +39,12 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 	// Build Tag
 	inboundDetourConfig.Tag = tag
 	// SniffingConfig
-	// Decode through the stable JSON contract: core changed list fields from pointers to values.
-	sniffingJSON, err := json.Marshal(map[string]any{
-		"enabled":         !config.DisableSniffing,
-		"destOverride":    []string{"http", "tls", "quic", "fakedns"},
-		"domainsExcluded": config.SniffingDomainsExcluded,
-		"metadataOnly":    config.SniffingMetadataOnly,
-		"routeOnly":       config.SniffingRouteOnly,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("marshal sniffing config: %w", err)
-	}
-	sniffingConfig := new(conf.SniffingConfig)
-	if err := json.Unmarshal(sniffingJSON, sniffingConfig); err != nil {
-		return nil, fmt.Errorf("decode sniffing config: %w", err)
+	sniffingConfig := &conf.SniffingConfig{
+		Enabled:         !config.DisableSniffing,
+		DestOverride:    conf.StringList{"http", "tls", "quic", "fakedns"},
+		DomainsExcluded: conf.StringList(config.SniffingDomainsExcluded),
+		MetadataOnly:    config.SniffingMetadataOnly,
+		RouteOnly:       config.SniffingRouteOnly,
 	}
 	inboundDetourConfig.SniffingConfig = sniffingConfig
 

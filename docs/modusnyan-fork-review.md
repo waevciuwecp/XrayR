@@ -20,7 +20,7 @@ No runtime, reload or load testing was performed. No source was copied.
 
 ## Limits affecting adoption
 
-- go.mod pins Xray-core v1.251015.0, older than our v1.260327.0. This fork is not
+- go.mod pins Xray-core v1.251015.0, older than our pre-upgrade v1.260327.0 baseline. This fork is not
   a source for the current core API upgrade.
 - api/newV2board/model.go has no decryption field and inboundbuilder.go still
   hardcodes Decryption to none. It does not solve Xboard VLESS Encryption.
