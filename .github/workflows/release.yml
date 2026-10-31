@@ -32,7 +32,8 @@ jobs:
         # Include amd64 on all platforms.
         # Disabled targets: windows, freebsd, openbsd, darwin.
         goos: [ linux ]
-        goarch: [ amd64, 386 ]
+        # Disabled: 386
+        goarch: [ amd64 ]
         # exclude:
           # Exclude i386 on darwin.
           # - goarch: 386
@@ -63,8 +64,8 @@ jobs:
           # BEGIN riscv64 & ARM64
           - goos: linux
             goarch: arm64
-          - goos: linux
-            goarch: riscv64
+          # - goos: linux
+          #   goarch: riscv64
           # END riscv64 & ARM64
           # BEGIN MIPS
           # - goos: linux
@@ -90,8 +91,8 @@ jobs:
           #   goarm: 7
           # END FreeBSD ARM
           # BEGIN S390X
-          - goos: linux
-            goarch: s390x
+          # - goos: linux
+          #   goarch: s390x
           # END S390X
           # END Other architectures
       fail-fast: false
