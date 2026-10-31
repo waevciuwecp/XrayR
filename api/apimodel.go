@@ -53,6 +53,7 @@ type NodeInfo struct {
 	RouteOnly           bool
 	EnableVless         bool
 	VlessFlow           string
+	Decryption          string
 	CypherMethod        string
 	ServerKey           string
 	ServiceName         string

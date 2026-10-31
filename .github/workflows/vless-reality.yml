@@ -1,0 +1,33 @@
+name: VLESS and REALITY compatibility
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '20 3 * * 1'
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        core: [locked, upstream]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Resolve current upstream core
+        if: matrix.core == 'upstream'
+        run: |
+          go get github.com/xtls/xray-core@main
+          go mod tidy
+          go list -m github.com/xtls/xray-core
+      - name: Verify panel and core contracts
+        run: go test -p 2 ./api/newV2board ./service/controller -run 'TestVless(PanelContract|InboundContract|PanelRealityWithoutLocalConfig)$' -count=1 -timeout=2m
+      - name: Build service
+        run: go build -p 2 ./...

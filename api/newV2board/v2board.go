@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	stdnet "net"
 	"os"
 	"regexp"
 	"strconv"
@@ -384,7 +385,7 @@ func (c *APIClient) parseV2rayNodeResponse(s *serverConfig) (*api.NodeInfo, erro
 	}
 
 	realityConfig := api.REALITYConfig{
-		Dest:             dest + ":" + s.VlessTlsSettings.ServerPort,
+		Dest:             stdnet.JoinHostPort(strings.Trim(dest, "[]"), s.VlessTlsSettings.ServerPort),
 		ProxyProtocolVer: xVer,
 		ServerNames:      []string{s.VlessTlsSettings.Sni},
 		PrivateKey:       s.VlessTlsSettings.PrivateKey,
@@ -451,6 +452,7 @@ func (c *APIClient) parseV2rayNodeResponse(s *serverConfig) (*api.NodeInfo, erro
 		Host:              host,
 		EnableVless:       c.EnableVless,
 		VlessFlow:         s.VlessFlow,
+		Decryption:        s.Decryption,
 		ServiceName:       s.NetworkSettings.ServiceName,
 		Header:            header,
 		EnableREALITY:     enableREALITY,
