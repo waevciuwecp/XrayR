@@ -79,8 +79,8 @@ jobs:
           # BEGIN PPC
           # - goos: linux # Removed due to the unsupport of shirou/gopsutil 
           #   goarch: ppc64
-          - goos: linux
-            goarch: ppc64le
+          # - goos: linux
+          #   goarch: ppc64le
           # END PPC
           # BEGIN FreeBSD ARM
           # - goos: freebsd
