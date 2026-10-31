@@ -35,21 +35,25 @@ var errSniffingTimeout = newError("timeout on sniffing")
 
 type cachedReader struct {
 	sync.Mutex
-	reader *pipe.Reader
+	reader buf.TimeoutReader // *pipe.Reader or *buf.TimeoutWrapperReader
 	cache  buf.MultiBuffer
 }
 
-func (r *cachedReader) Cache(b *buf.Buffer) {
-	mb, _ := r.reader.ReadMultiBufferTimeout(time.Millisecond * 100)
+func (r *cachedReader) Cache(b *buf.Buffer, deadline time.Duration) error {
+	mb, err := r.reader.ReadMultiBufferTimeout(deadline)
+	if err != nil {
+		return err
+	}
 	r.Lock()
 	if !mb.IsEmpty() {
 		r.cache, _ = buf.MergeMulti(r.cache, mb)
 	}
 	b.Clear()
-	rawBytes := b.Extend(buf.Size)
+	rawBytes := b.Extend(min(r.cache.Len(), b.Cap()))
 	n := r.cache.Copy(rawBytes)
 	b.Resize(0, int32(n))
 	r.Unlock()
+	return nil
 }
 
 func (r *cachedReader) readInternal() buf.MultiBuffer {
@@ -89,13 +93,15 @@ func (r *cachedReader) Interrupt() {
 		r.cache = buf.ReleaseMulti(r.cache)
 	}
 	r.Unlock()
-	r.reader.Interrupt()
+	if wrapped, ok := r.reader.(*buf.TimeoutWrapperReader); ok {
+		common.Interrupt(wrapped.Reader)
+	} else {
+		common.Interrupt(r.reader)
+	}
 }
 
-// DefaultDispatcher is a custom implementation that embeds the official dispatcher
-// and adds XrayR-specific features like rate limiting and rule management.
+// DefaultDispatcher adds XrayR limits and rules to the current core dispatch path.
 type DefaultDispatcher struct {
-	*dispatcher.DefaultDispatcher
 	ohm         outbound.Manager
 	router      routing.Router
 	policy      policy.Manager
@@ -108,24 +114,12 @@ type DefaultDispatcher struct {
 
 func init() {
 	common.Must(common.RegisterConfig((*Config)(nil), func(ctx context.Context, config interface{}) (interface{}, error) {
-		// First create the official dispatcher
-		officialDispatcher := new(dispatcher.DefaultDispatcher)
-		d := &DefaultDispatcher{
-			DefaultDispatcher: officialDispatcher,
-		}
+		d := new(DefaultDispatcher)
 
 		if err := core.RequireFeatures(ctx, func(om outbound.Manager, router routing.Router, pm policy.Manager, sm stats.Manager, dc dns.Client) error {
 			core.OptionalFeatures(ctx, func(fdns dns.FakeDNSEngine) {
 				d.fdns = fdns
 			})
-			// Initialize the official dispatcher with an empty config
-			dispatcherConfig := &dispatcher.Config{
-				Settings: &dispatcher.SessionConfig{},
-			}
-			if err := officialDispatcher.Init(dispatcherConfig, om, router, pm, sm); err != nil {
-				return err
-			}
-			// Initialize our custom fields
 			return d.Init(config.(*Config), om, router, pm, sm, dc)
 		}); err != nil {
 			return nil, err
@@ -146,7 +140,7 @@ func (d *DefaultDispatcher) Init(config *Config, om outbound.Manager, router rou
 	return nil
 }
 
-// Type implements common.HasType for registering as a separate feature, not overriding core dispatcher.
+// Type implements common.HasType for the core routing dispatcher.
 func (*DefaultDispatcher) Type() interface{} {
 	return Type()
 }
@@ -176,50 +170,12 @@ func (d *DefaultDispatcher) getLink(ctx context.Context) (*transport.Link, *tran
 		Writer: downlinkWriter,
 	}
 
-	sessionInbound := session.InboundFromContext(ctx)
-	var user *protocol.MemoryUser
-	if sessionInbound != nil {
-		// Disable splice to avoid Vision/REALITY bypassing stats path
-		sessionInbound.CanSpliceCopy = 3
-		user = sessionInbound.User
-		sessionInbound.CanSpliceCopy = 3
-	}
-
-	if user != nil && len(user.Email) > 0 {
-		// Speed Limit and Device Limit
-		bucket, ok, reject := d.Limiter.GetUserBucket(sessionInbound.Tag, user.Email, sessionInbound.Source.Address.IP().String())
-		if reject {
-			errors.LogWarning(ctx, "Devices reach the limit: ", user.Email)
-			common.Close(outboundLink.Writer)
-			common.Close(inboundLink.Writer)
-			common.Interrupt(outboundLink.Reader)
-			common.Interrupt(inboundLink.Reader)
-			return nil, nil, newError("Devices reach the limit: ", user.Email)
-		}
-		if ok {
-			inboundLink.Writer = d.Limiter.RateWriter(inboundLink.Writer, bucket)
-			outboundLink.Writer = d.Limiter.RateWriter(outboundLink.Writer, bucket)
-		}
-
-		p := d.policy.ForLevel(user.Level)
-		if p.Stats.UserUplink {
-			name := "user>>>" + user.Email + ">>>traffic>>>uplink"
-			if c, _ := d.stats.GetOrRegisterCounter(name); c != nil {
-				inboundLink.Writer = &SizeStatWriter{
-					Counter: c,
-					Writer:  inboundLink.Writer,
-				}
-			}
-		}
-		if p.Stats.UserDownlink {
-			name := "user>>>" + user.Email + ">>>traffic>>>downlink"
-			if c, _ := d.stats.GetOrRegisterCounter(name); c != nil {
-				outboundLink.Writer = &SizeStatWriter{
-					Counter: c,
-					Writer:  outboundLink.Writer,
-				}
-			}
-		}
+	if err := d.wrapLink(ctx, outboundLink); err != nil {
+		common.Close(inboundLink.Writer)
+		common.Interrupt(inboundLink.Reader)
+		common.Close(outboundLink.Writer)
+		common.Interrupt(outboundLink.Reader)
+		return nil, nil, err
 	}
 
 	return inboundLink, outboundLink, nil
@@ -288,7 +244,7 @@ func (d *DefaultDispatcher) Dispatch(ctx context.Context, destination net.Destin
 	} else {
 		go func() {
 			cReader := &cachedReader{
-				reader: outbound.Reader.(*pipe.Reader),
+				reader: outbound.Reader.(buf.TimeoutReader),
 			}
 			outbound.Reader = cReader
 			result, err := sniffer(ctx, cReader, sniffingRequest.MetadataOnly, destination.Network)
@@ -299,7 +255,15 @@ func (d *DefaultDispatcher) Dispatch(ctx context.Context, destination net.Destin
 				domain := result.Domain()
 				errors.LogInfo(ctx, "sniffed domain: ", domain)
 				destination.Address = net.ParseAddress(domain)
-				if sniffingRequest.RouteOnly && result.Protocol() != "fakedns" {
+				protocol := result.Protocol()
+				if composite, ok := result.(SnifferResultComposite); ok {
+					protocol = composite.ProtocolForDomainResult()
+				}
+				fakeIP := false
+				if engine, ok := d.fdns.(dns.FakeDNSEngineRev0); ok {
+					fakeIP = engine.IsIPInIPPool(ob.Target.Address)
+				}
+				if sniffingRequest.RouteOnly && protocol != "fakedns" && protocol != "fakedns+others" && !fakeIP {
 					ob.RouteTarget = destination
 				} else {
 					ob.Target = destination
@@ -329,13 +293,18 @@ func (d *DefaultDispatcher) DispatchLink(ctx context.Context, destination net.De
 		content = new(session.Content)
 		ctx = session.ContextWithContent(ctx, content)
 	}
+	if err := d.wrapLink(ctx, outbound); err != nil {
+		common.Close(outbound.Writer)
+		common.Interrupt(outbound.Reader)
+		return err
+	}
 	sniffingRequest := content.SniffingRequest
 	if !sniffingRequest.Enabled {
-		go d.routedDispatch(ctx, outbound, destination)
+		d.routedDispatch(ctx, outbound, destination)
 	} else {
-		go func() {
+		func() {
 			cReader := &cachedReader{
-				reader: outbound.Reader.(*pipe.Reader),
+				reader: outbound.Reader.(buf.TimeoutReader),
 			}
 			outbound.Reader = cReader
 			result, err := sniffer(ctx, cReader, sniffingRequest.MetadataOnly, destination.Network)
@@ -346,7 +315,15 @@ func (d *DefaultDispatcher) DispatchLink(ctx context.Context, destination net.De
 				domain := result.Domain()
 				errors.LogInfo(ctx, "sniffed domain: ", domain)
 				destination.Address = net.ParseAddress(domain)
-				if sniffingRequest.RouteOnly && result.Protocol() != "fakedns" {
+				protocol := result.Protocol()
+				if composite, ok := result.(SnifferResultComposite); ok {
+					protocol = composite.ProtocolForDomainResult()
+				}
+				fakeIP := false
+				if engine, ok := d.fdns.(dns.FakeDNSEngineRev0); ok {
+					fakeIP = engine.IsIPInIPPool(ob.Target.Address)
+				}
+				if sniffingRequest.RouteOnly && protocol != "fakedns" && protocol != "fakedns+others" && !fakeIP {
 					ob.RouteTarget = destination
 				} else {
 					ob.Target = destination
@@ -360,7 +337,7 @@ func (d *DefaultDispatcher) DispatchLink(ctx context.Context, destination net.De
 }
 
 func sniffer(ctx context.Context, cReader *cachedReader, metadataOnly bool, network net.Network) (SniffResult, error) {
-	payload := buf.New()
+	payload := buf.NewWithSize(32767)
 	defer payload.Release()
 
 	sniffer := NewSniffer(ctx)
@@ -372,26 +349,36 @@ func sniffer(ctx context.Context, cReader *cachedReader, metadataOnly bool, netw
 	}
 
 	contentResult, contentErr := func() (SniffResult, error) {
+		cacheDeadline := 200 * time.Millisecond
 		totalAttempt := 0
 		for {
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			default:
-				totalAttempt++
-				if totalAttempt > 2 {
-					return nil, errSniffingTimeout
+				cachingStartingTimeStamp := time.Now()
+				err := cReader.Cache(payload, cacheDeadline)
+				if err != nil {
+					return nil, err
 				}
+				cachingTimeElapsed := time.Since(cachingStartingTimeStamp)
+				cacheDeadline -= cachingTimeElapsed
 
-				cReader.Cache(payload)
 				if !payload.IsEmpty() {
 					result, err := sniffer.Sniff(ctx, payload.Bytes(), network)
-					if err != common.ErrNoClue {
+					switch err {
+					case common.ErrNoClue: // No Clue: protocol not matches, and sniffer cannot determine whether there will be a match or not
+						totalAttempt++
+					case protocol.ErrProtoNeedMoreData: // Protocol Need More Data: protocol matches, but need more data to complete sniffing
+						// in this case, do not add totalAttempt(allow to read until timeout)
+					default:
 						return result, err
 					}
+				} else {
+					totalAttempt++
 				}
-				if payload.IsFull() {
-					return nil, errUnknownContent
+				if totalAttempt >= 2 || cacheDeadline <= 0 {
+					return nil, errSniffingTimeout
 				}
 			}
 		}
@@ -416,7 +403,7 @@ func (d *DefaultDispatcher) routedDispatch(ctx context.Context, link *transport.
 	// Check if domain and protocol hit the rule
 	sessionInbound := session.InboundFromContext(ctx)
 	// Whether the inbound connection contains a user
-	if sessionInbound.User != nil {
+	if sessionInbound != nil && sessionInbound.User != nil {
 		if d.RuleManager.Detect(sessionInbound.Tag, destination.String(), sessionInbound.User.Email) {
 			errors.LogError(ctx, fmt.Sprintf("User %s access %s reject by rule", sessionInbound.User.Email, destination.String()))
 			newError("destination is reject by rule")
@@ -488,4 +475,30 @@ func (d *DefaultDispatcher) routedDispatch(ctx context.Context, link *transport.
 	}
 
 	handler.Dispatch(ctx, link)
+}
+
+// wrapLink keeps native Dispatch and externally supplied links under the same limits and accounting.
+func (d *DefaultDispatcher) wrapLink(ctx context.Context, link *transport.Link) error {
+	inbound := session.InboundFromContext(ctx)
+	if inbound != nil {
+		// Preserve accounting/limiting until splice has an equivalent measured path.
+		inbound.CanSpliceCopy = 3
+		if inbound.User != nil && inbound.User.Email != "" {
+			source := ""
+			if inbound.Source.Address != nil {
+				source = inbound.Source.Address.IP().String()
+			}
+			bucket, limited, reject := d.Limiter.GetUserBucket(inbound.Tag, inbound.User.Email, source)
+			if reject {
+				return newError("Devices reach the limit: ", inbound.User.Email)
+			}
+			if limited {
+				link.Reader = d.Limiter.RateReader(ctx, link.Reader, bucket)
+				link.Writer = d.Limiter.RateWriter(ctx, link.Writer, bucket)
+			}
+		}
+	}
+	wrapped := dispatcher.WrapLink(ctx, d.policy, d.stats, link)
+	*link = *wrapped
+	return nil
 }

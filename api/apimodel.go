@@ -44,6 +44,8 @@ type NodeInfo struct {
 	Port                uint32
 	SpeedLimit          uint64 // Bps
 	AlterID             uint16
+	XHTTPMode           string
+	XHTTPExtra          json.RawMessage
 	TransportProtocol   string
 	FakeType            string
 	Host                string
@@ -123,12 +125,16 @@ type DetectResult struct {
 }
 
 type REALITYConfig struct {
-	Dest             string
-	ProxyProtocolVer uint64
-	ServerNames      []string
-	PrivateKey       string
-	MinClientVer     string
-	MaxClientVer     string
-	MaxTimeDiff      uint64
-	ShortIds         []string
+	Target                string
+	Mldsa65Seed           string
+	LimitFallbackUpload   conf.LimitFallback
+	LimitFallbackDownload conf.LimitFallback
+	Dest                  string
+	ProxyProtocolVer      uint64
+	ServerNames           []string
+	PrivateKey            string
+	MinClientVer          string
+	MaxClientVer          string
+	MaxTimeDiff           uint64
+	ShortIds              []string
 }

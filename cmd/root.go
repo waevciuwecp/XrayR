@@ -98,12 +98,16 @@ func run() error {
 				log.SetReportCaller(true)
 			}
 
-			p.Start()
+			if err := p.Start(); err != nil {
+				log.Fatalf("configuration restart failed: %s", err)
+			}
 			lastTime = time.Now()
 		}
 	})
 
-	p.Start()
+	if err := p.Start(); err != nil {
+		return err
+	}
 	defer p.Close()
 
 	// Explicitly triggering GC to remove garbage from config loading.

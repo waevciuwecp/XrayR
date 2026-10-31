@@ -5,14 +5,11 @@ import (
 	"fmt"
 
 	"github.com/xtls/xray-core/common/protocol"
-	"github.com/xtls/xray-core/common/session"
 	"github.com/xtls/xray-core/core"
 	"github.com/xtls/xray-core/features/inbound"
 	"github.com/xtls/xray-core/features/outbound"
-	"github.com/xtls/xray-core/features/policy"
 	"github.com/xtls/xray-core/features/stats"
 	"github.com/xtls/xray-core/proxy"
-	"github.com/xtls/xray-core/transport"
 
 	"github.com/XrayR-project/XrayR/api"
 	"github.com/XrayR-project/XrayR/common/limiter"
@@ -21,21 +18,6 @@ import (
 func (c *Controller) removeInbound(tag string) error {
 	err := c.ibm.RemoveHandler(context.Background(), tag)
 	return err
-}
-
-// statsOutboundWrapper wraps outbound.Handler to ensure user downlink traffic is counted.
-type statsOutboundWrapper struct {
-	outbound.Handler
-	pm policy.Manager
-	sm stats.Manager
-}
-
-func (w *statsOutboundWrapper) Dispatch(ctx context.Context, link *transport.Link) {
-	// Disable kernel splice to avoid Vision/REALITY bypassing userland stats path
-	if sess := session.InboundFromContext(ctx); sess != nil {
-		sess.CanSpliceCopy = 3
-	}
-	w.Handler.Dispatch(ctx, link)
 }
 
 func (c *Controller) removeOutbound(tag string) error {
@@ -67,8 +49,6 @@ func (c *Controller) addOutbound(config *core.OutboundHandlerConfig) error {
 	if !ok {
 		return fmt.Errorf("not an InboundHandler: %s", err)
 	}
-	// Wrap outbound handler to ensure downlink stats are always counted (e.g., REALITY/VLESS cases)
-	handler = &statsOutboundWrapper{Handler: handler, pm: c.pm, sm: c.stm}
 	if err := c.obm.AddHandler(context.Background(), handler); err != nil {
 		return err
 	}
@@ -139,26 +119,18 @@ func (c *Controller) getTraffic(email string) (up int64, down int64, upCounter s
 	downName := "user>>>" + email + ">>>traffic>>>downlink"
 	upCounter = c.stm.GetCounter(upName)
 	downCounter = c.stm.GetCounter(downName)
-	if upCounter != nil && upCounter.Value() != 0 {
+	if upCounter != nil {
 		up = upCounter.Value()
-	} else {
-		upCounter = nil
 	}
-	if downCounter != nil && downCounter.Value() != 0 {
+	if downCounter != nil {
 		down = downCounter.Value()
-	} else {
-		downCounter = nil
 	}
 	return up, down, upCounter, downCounter
 }
 
-func (c *Controller) resetTraffic(upCounterList *[]stats.Counter, downCounterList *[]stats.Counter) {
-	for _, upCounter := range *upCounterList {
-		upCounter.Set(0)
-	}
-	for _, downCounter := range *downCounterList {
-		downCounter.Set(0)
-	}
+type trafficSnapshot struct {
+	counter stats.Counter
+	value   int64
 }
 
 func (c *Controller) AddInboundLimiter(tag string, nodeSpeedLimit uint64, userList *[]api.UserInfo, globalDeviceLimitConfig *limiter.GlobalDeviceLimitConfig) error {
@@ -187,4 +159,18 @@ func (c *Controller) UpdateRule(tag string, newRuleList []api.DetectRule) error 
 
 func (c *Controller) GetDetectResult(tag string) (*[]api.DetectResult, error) {
 	return c.dispatcher.RuleManager.GetDetectResult(tag)
+}
+
+func (c *Controller) reportTraffic(traffic []api.UserTraffic, up, down []trafficSnapshot) error {
+	if !c.config.DisableUploadTraffic {
+		if err := c.apiClient.ReportUserTraffic(&traffic); err != nil {
+			return err
+		}
+	}
+	for _, list := range [][]trafficSnapshot{up, down} {
+		for _, snapshot := range list {
+			snapshot.counter.Add(-snapshot.value)
+		}
+	}
+	return nil
 }

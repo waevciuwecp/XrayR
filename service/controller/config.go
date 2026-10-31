@@ -3,6 +3,7 @@ package controller
 import (
 	"github.com/XrayR-project/XrayR/common/limiter"
 	"github.com/XrayR-project/XrayR/common/mylego"
+	"github.com/xtls/xray-core/infra/conf"
 )
 
 type Config struct {
@@ -26,6 +27,7 @@ type Config struct {
 	REALITYConfigs            *REALITYConfig                   `mapstructure:"REALITYConfigs"`
 
 	// SniffingConfig extended fields
+	SniffingIPsExcluded     []string `mapstructure:"SniffingIPsExcluded"`
 	SniffingDomainsExcluded []string `mapstructure:"SniffingDomainsExcluded"`
 	SniffingMetadataOnly    bool     `mapstructure:"SniffingMetadataOnly"`
 	SniffingRouteOnly       bool     `mapstructure:"SniffingRouteOnly"`
@@ -41,31 +43,32 @@ type Config struct {
 	REALITYShortId     string `mapstructure:"REALITYShortId"`
 
 	// SocketConfig extended fields
-	SOMark                uint32   `mapstructure:"SOMark"`
-	TCPFastOpen           bool     `mapstructure:"TCPFastOpen"`
-	TProxy                string   `mapstructure:"TProxy"`
-	DialerProxy           string   `mapstructure:"DialerProxy"`
-	BindInterface         string   `mapstructure:"BindInterface"`
-	TCPKeepAliveInterval  int32    `mapstructure:"TCPKeepAliveInterval"`
-	TCPCongestion         string   `mapstructure:"TCPCongestion"`
-	TrustedXForwardedFor  []string `mapstructure:"TrustedXForwardedFor"`
+	SOMark               uint32   `mapstructure:"SOMark"`
+	TCPFastOpen          bool     `mapstructure:"TCPFastOpen"`
+	TProxy               string   `mapstructure:"TProxy"`
+	DialerProxy          string   `mapstructure:"DialerProxy"`
+	BindInterface        string   `mapstructure:"BindInterface"`
+	TCPKeepAliveInterval int32    `mapstructure:"TCPKeepAliveInterval"`
+	TCPCongestion        string   `mapstructure:"TCPCongestion"`
+	TrustedXForwardedFor []string `mapstructure:"TrustedXForwardedFor"`
 
 	// XHTTP/SplitHTTP extended fields
-	XHTTPMode           string      `mapstructure:"XHTTPMode"`
-	XHTTPNoGRPCHeader   bool        `mapstructure:"XHTTPNoGRPCHeader"`
-	XHTTPNoSSEHeader    bool        `mapstructure:"XHTTPNoSSEHeader"`
-	XHTTPPaddingBytes   *Int32Range `mapstructure:"XHTTPPaddingBytes"`
+	XHTTPExtraJSON    string      `mapstructure:"XHTTPExtraJSON"`
+	XHTTPMode         string      `mapstructure:"XHTTPMode"`
+	XHTTPNoGRPCHeader bool        `mapstructure:"XHTTPNoGRPCHeader"`
+	XHTTPNoSSEHeader  bool        `mapstructure:"XHTTPNoSSEHeader"`
+	XHTTPPaddingBytes *Int32Range `mapstructure:"XHTTPPaddingBytes"`
 
 	// WebSocket extended fields
 	WSHeartbeatPeriod uint32 `mapstructure:"WSHeartbeatPeriod"`
 
 	// GRPC extended fields
-	GRPCMultiMode          bool   `mapstructure:"GRPCMultiMode"`
-	GRPCIdleTimeout        int32  `mapstructure:"GRPCIdleTimeout"`
-	GRPCHealthCheckTimeout int32  `mapstructure:"GRPCHealthCheckTimeout"`
-	GRPCPermitWithoutStream bool  `mapstructure:"GRPCPermitWithoutStream"`
-	GRPCInitialWindowsSize int32  `mapstructure:"GRPCInitialWindowsSize"`
-	GRPCUserAgent          string `mapstructure:"GRPCUserAgent"`
+	GRPCMultiMode           bool   `mapstructure:"GRPCMultiMode"`
+	GRPCIdleTimeout         int32  `mapstructure:"GRPCIdleTimeout"`
+	GRPCHealthCheckTimeout  int32  `mapstructure:"GRPCHealthCheckTimeout"`
+	GRPCPermitWithoutStream bool   `mapstructure:"GRPCPermitWithoutStream"`
+	GRPCInitialWindowsSize  int32  `mapstructure:"GRPCInitialWindowsSize"`
+	GRPCUserAgent           string `mapstructure:"GRPCUserAgent"`
 
 	// FinalMask JSON config (raw JSON matching Xray-core FinalMask structure)
 	FinalMaskJSON string `mapstructure:"FinalMaskJSON"`
@@ -75,6 +78,8 @@ type Config struct {
 	MuxConcurrency     int16  `mapstructure:"MuxConcurrency"`
 	MuxXudpConcurrency int16  `mapstructure:"MuxXudpConcurrency"`
 	MuxXudpProxyUDP443 string `mapstructure:"MuxXudpProxyUDP443"`
+
+	FreedomFinalRules []*conf.FreedomFinalRuleConfig `mapstructure:"FreedomFinalRules"`
 
 	// Freedom Fragment (TCP fragmentation for anti-censorship)
 	FragmentPackets  string      `mapstructure:"FragmentPackets"`
@@ -110,13 +115,17 @@ type FallBackConfig struct {
 }
 
 type REALITYConfig struct {
-	Show             bool     `mapstructure:"Show"`
-	Dest             string   `mapstructure:"Dest"`
-	ProxyProtocolVer uint64   `mapstructure:"ProxyProtocolVer"`
-	ServerNames      []string `mapstructure:"ServerNames"`
-	PrivateKey       string   `mapstructure:"PrivateKey"`
-	MinClientVer     string   `mapstructure:"MinClientVer"`
-	MaxClientVer     string   `mapstructure:"MaxClientVer"`
-	MaxTimeDiff      uint64   `mapstructure:"MaxTimeDiff"`
-	ShortIds         []string `mapstructure:"ShortIds"`
+	Target                string             `mapstructure:"Target"`
+	Mldsa65Seed           string             `mapstructure:"Mldsa65Seed"`
+	LimitFallbackUpload   conf.LimitFallback `mapstructure:"LimitFallbackUpload"`
+	LimitFallbackDownload conf.LimitFallback `mapstructure:"LimitFallbackDownload"`
+	Show                  bool               `mapstructure:"Show"`
+	Dest                  string             `mapstructure:"Dest"`
+	ProxyProtocolVer      uint64             `mapstructure:"ProxyProtocolVer"`
+	ServerNames           []string           `mapstructure:"ServerNames"`
+	PrivateKey            string             `mapstructure:"PrivateKey"`
+	MinClientVer          string             `mapstructure:"MinClientVer"`
+	MaxClientVer          string             `mapstructure:"MaxClientVer"`
+	MaxTimeDiff           uint64             `mapstructure:"MaxTimeDiff"`
+	ShortIds              []string           `mapstructure:"ShortIds"`
 }
