@@ -1,0 +1,39 @@
+name: VLESS and REALITY compatibility
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '20 3 * * 1'
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "0"
+    strategy:
+      fail-fast: false
+      matrix:
+        core: [locked, upstream]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Resolve current upstream core
+        if: matrix.core == 'upstream'
+        run: |
+          go get github.com/xtls/xray-core@main
+          go mod tidy
+          go list -m github.com/xtls/xray-core
+      - name: Verify panel and core contracts
+        run: go test -p 2 ./app/mydispatcher ./api/newV2board ./service/controller -run 'TestVless(PanelContract|InboundContract|PanelRealityWithoutLocalConfig|SniffingConfig)$|Test(StatsWriter|OverrideExclusions)$' -count=1 -timeout=2m
+      - name: Build service
+        run: go build -p 2 ./...

@@ -40,18 +40,12 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 	inboundDetourConfig.Tag = tag
 	// SniffingConfig
 	sniffingConfig := &conf.SniffingConfig{
-		Enabled:      true,
-		DestOverride: &conf.StringList{"http", "tls", "quic", "fakedns"},
+		Enabled:         !config.DisableSniffing,
+		DestOverride:    conf.StringList{"http", "tls", "quic", "fakedns"},
+		DomainsExcluded: conf.StringList(config.SniffingDomainsExcluded),
+		MetadataOnly:    config.SniffingMetadataOnly,
+		RouteOnly:       config.SniffingRouteOnly,
 	}
-	if config.DisableSniffing {
-		sniffingConfig.Enabled = false
-	}
-	if len(config.SniffingDomainsExcluded) > 0 {
-		sl := conf.StringList(config.SniffingDomainsExcluded)
-		sniffingConfig.DomainsExcluded = &sl
-	}
-	sniffingConfig.MetadataOnly = config.SniffingMetadataOnly
-	sniffingConfig.RouteOnly = config.SniffingRouteOnly
 	inboundDetourConfig.SniffingConfig = sniffingConfig
 
 	var (
@@ -66,12 +60,19 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 	case "V2ray", "Vmess", "Vless":
 		if nodeInfo.EnableVless || (nodeInfo.NodeType == "Vless" && nodeInfo.NodeType != "Vmess") {
 			protocol = "vless"
+			decryption := nodeInfo.Decryption
+			if decryption == "" {
+				decryption = "none"
+			}
+			if decryption != "none" && config.EnableFallback {
+				return nil, fmt.Errorf("node %d: VLESS Encryption requires EnableFallback: false", nodeInfo.NodeID)
+			}
 			// Enable fallback
 			if config.EnableFallback {
 				fallbackConfigs, err := buildVlessFallbacks(config.FallBackConfigs)
 				if err == nil {
 					proxySetting = &conf.VLessInboundConfig{
-						Decryption: "none",
+						Decryption: decryption,
 						Fallbacks:  fallbackConfigs,
 					}
 				} else {
@@ -79,7 +80,7 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 				}
 			} else {
 				proxySetting = &conf.VLessInboundConfig{
-					Decryption: "none",
+					Decryption: decryption,
 				}
 			}
 		} else {
@@ -232,11 +233,11 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 		streamSetting.HTTPUPGRADESettings = httpupgradeSettings
 	case "splithttp", "xhttp":
 		splithttpSetting := &conf.SplitHTTPConfig{
-			Path:          nodeInfo.Path,
-			Host:          nodeInfo.Host,
-			Mode:          config.XHTTPMode,
-			NoGRPCHeader:  config.XHTTPNoGRPCHeader,
-			NoSSEHeader:   config.XHTTPNoSSEHeader,
+			Path:         nodeInfo.Path,
+			Host:         nodeInfo.Host,
+			Mode:         config.XHTTPMode,
+			NoGRPCHeader: config.XHTTPNoGRPCHeader,
+			NoSSEHeader:  config.XHTTPNoSSEHeader,
 		}
 		if config.XHTTPPaddingBytes != nil {
 			splithttpSetting.XPaddingBytes = conf.Int32Range{
@@ -265,7 +266,7 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 
 			r := nodeInfo.REALITYConfig
 			realitySettings := &conf.REALITYConfig{
-				Show:         config.REALITYConfigs.Show,
+				Show:         config.REALITYConfigs != nil && config.REALITYConfigs.Show,
 				Dest:         []byte(`"` + r.Dest + `"`),
 				Xver:         r.ProxyProtocolVer,
 				ServerNames:  r.ServerNames,
@@ -342,11 +343,11 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 	// SocketConfig
 	{
 		sockoptConfig := &conf.SocketConfig{
-			AcceptProxyProtocol:   config.EnableProxyProtocol,
-			Mark:                  int32(config.SOMark),
-			DialerProxy:           config.DialerProxy,
-			TCPKeepAliveInterval:  config.TCPKeepAliveInterval,
-			TCPCongestion:         config.TCPCongestion,
+			AcceptProxyProtocol:  config.EnableProxyProtocol,
+			Mark:                 int32(config.SOMark),
+			DialerProxy:          config.DialerProxy,
+			TCPKeepAliveInterval: config.TCPKeepAliveInterval,
+			TCPCongestion:        config.TCPCongestion,
 		}
 		if config.BindInterface != "" {
 			sockoptConfig.Interface = config.BindInterface
