@@ -2,13 +2,13 @@ package panel
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"sync"
 
 	"dario.cat/mergo"
 	"github.com/r3labs/diff/v2"
 	log "github.com/sirupsen/logrus"
-	"github.com/xtls/xray-core/app/dispatcher"
 	"github.com/xtls/xray-core/app/proxyman"
 	"github.com/xtls/xray-core/app/stats"
 	"github.com/xtls/xray-core/common/serial"
@@ -140,7 +140,6 @@ func (p *Panel) loadCore(panelConfig *Config) *core.Instance {
 	config := &core.Config{
 		App: []*serial.TypedMessage{
 			serial.ToTypedMessage(coreLogConfig.Build()),
-			serial.ToTypedMessage(&dispatcher.Config{}),
 			serial.ToTypedMessage(&mydispatcher.Config{}),
 			serial.ToTypedMessage(&stats.Config{}),
 			serial.ToTypedMessage(&proxyman.InboundConfig{}),
@@ -161,14 +160,27 @@ func (p *Panel) loadCore(panelConfig *Config) *core.Instance {
 }
 
 // Start the panel
-func (p *Panel) Start() {
+func (p *Panel) Start() (err error) {
 	p.access.Lock()
 	defer p.access.Unlock()
 	log.Print("Start the panel..")
 	// Load Core
 	server := p.loadCore(p.panelConfig)
-	if err := server.Start(); err != nil {
-		log.Panicf("Failed to start instance: %s", err)
+	defer func() {
+		if err != nil {
+			for _, service := range p.Service {
+				if closeErr := service.Close(); closeErr != nil {
+					log.Error(closeErr)
+				}
+			}
+			p.Service = nil
+			server.Close()
+			p.Server = nil
+			p.Running = false
+		}
+	}()
+	if err = server.Start(); err != nil {
+		return fmt.Errorf("start core: %w", err)
 	}
 	p.Server = server
 
@@ -191,14 +203,14 @@ func (p *Panel) Start() {
 		case "BunPanel":
 			apiClient = bunpanel.New(nodeConfig.ApiConfig)
 		default:
-			log.Panicf("Unsupport panel type: %s", nodeConfig.PanelType)
+			return fmt.Errorf("unsupported panel type: %s", nodeConfig.PanelType)
 		}
 		var controllerService service.Service
 		// Register controller service
 		controllerConfig := getDefaultControllerConfig()
 		if nodeConfig.ControllerConfig != nil {
 			if err := mergo.Merge(controllerConfig, nodeConfig.ControllerConfig, mergo.WithOverride); err != nil {
-				log.Panicf("Read Controller Config Failed")
+				return fmt.Errorf("read controller config: %w", err)
 			}
 		}
 		controllerService = controller.New(server, apiClient, controllerConfig, nodeConfig.PanelType)
@@ -210,7 +222,7 @@ func (p *Panel) Start() {
 	for _, s := range p.Service {
 		err := s.Start()
 		if err != nil {
-			log.Panicf("Panel Start failed: %s", err)
+			return fmt.Errorf("panel start failed: %w", err)
 		}
 	}
 	p.Running = true
@@ -224,11 +236,13 @@ func (p *Panel) Close() {
 	for _, s := range p.Service {
 		err := s.Close()
 		if err != nil {
-			log.Panicf("Panel Close failed: %s", err)
+			log.Errorf("Panel close failed: %s", err)
 		}
 	}
 	p.Service = nil
-	p.Server.Close()
+	if p.Server != nil {
+		p.Server.Close()
+	}
 	p.Running = false
 	return
 }
@@ -243,6 +257,7 @@ func parseConnectionConfig(c *ConnectionConfig) (policy *conf.Policy) {
 	policy = &conf.Policy{
 		StatsUserUplink:   true,
 		StatsUserDownlink: true,
+		StatsUserOnline:   true,
 		Handshake:         &connectionConfig.Handshake,
 		ConnectionIdle:    &connectionConfig.ConnIdle,
 		UplinkOnly:        &connectionConfig.UplinkOnly,

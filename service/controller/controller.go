@@ -12,7 +12,6 @@ import (
 	"github.com/xtls/xray-core/core"
 	"github.com/xtls/xray-core/features/inbound"
 	"github.com/xtls/xray-core/features/outbound"
-	"github.com/xtls/xray-core/features/policy"
 	"github.com/xtls/xray-core/features/stats"
 
 	"github.com/XrayR-project/XrayR/api"
@@ -42,7 +41,6 @@ type Controller struct {
 	ibm          inbound.Manager
 	obm          outbound.Manager
 	stm          stats.Manager
-	pm           policy.Manager
 	dispatcher   *mydispatcher.DefaultDispatcher
 	startAt      time.Time
 	logger       *log.Entry
@@ -68,7 +66,6 @@ func New(server *core.Instance, api api.API, config *Config, panelType string) *
 		ibm:        server.GetFeature(inbound.ManagerType()).(inbound.Manager),
 		obm:        server.GetFeature(outbound.ManagerType()).(outbound.Manager),
 		stm:        server.GetFeature(stats.ManagerType()).(stats.Manager),
-		pm:         server.GetFeature(policy.ManagerType()).(policy.Manager),
 		dispatcher: server.GetFeature(mydispatcher.Type()).(*mydispatcher.DefaultDispatcher),
 		startAt:    time.Now(),
 		logger:     logger,
@@ -94,8 +91,7 @@ func (c *Controller) Start() error {
 	// Add new tag
 	err = c.addNewTag(newNodeInfo)
 	if err != nil {
-		c.logger.Panic(err)
-		return err
+		return fmt.Errorf("node %d: start failed: %w", newNodeInfo.NodeID, err)
 	}
 	// Update user
 	userInfo, err := c.apiClient.GetUserList()
@@ -106,14 +102,15 @@ func (c *Controller) Start() error {
 	// sync controller userList
 	c.userList = userInfo
 
+	// Add Limiter
+	if err := c.AddInboundLimiter(c.Tag, newNodeInfo.SpeedLimit, userInfo, c.config.GlobalDeviceLimitConfig); err != nil {
+		return fmt.Errorf("initialize node limiter: %w", err)
+	}
+
+	// Authenticate users only after their limits are installed.
 	err = c.addNewUser(userInfo, newNodeInfo)
 	if err != nil {
 		return err
-	}
-
-	// Add Limiter
-	if err := c.AddInboundLimiter(c.Tag, newNodeInfo.SpeedLimit, userInfo, c.config.GlobalDeviceLimitConfig); err != nil {
-		c.logger.Print(err)
 	}
 
 	// Add Rule Manager
@@ -153,7 +150,7 @@ func (c *Controller) Start() error {
 	)
 
 	// Check cert service in need
-	if c.nodeInfo.EnableTLS && c.config.EnableREALITY == false {
+	if c.needsCertificateRenewal() {
 		c.tasks = append(c.tasks, periodicTask{
 			tag: "cert monitor",
 			Periodic: &task.Periodic{
@@ -173,15 +170,16 @@ func (c *Controller) Start() error {
 
 // Close implement the Close() function of the service interface
 func (c *Controller) Close() error {
+	var closeErr error
 	for i := range c.tasks {
 		if c.tasks[i].Periodic != nil {
 			if err := c.tasks[i].Periodic.Close(); err != nil {
-				c.logger.Panicf("%s periodic task close failed: %s", c.tasks[i].tag, err)
+				closeErr = errors.Join(closeErr, fmt.Errorf("%s periodic task close failed: %w", c.tasks[i].tag, err))
 			}
 		}
 	}
 
-	return nil
+	return closeErr
 }
 
 func (c *Controller) nodeInfoMonitor() (err error) {
@@ -526,8 +524,8 @@ func (c *Controller) userInfoMonitor() (err error) {
 
 	// Get User traffic
 	var userTraffic []api.UserTraffic
-	var upCounterList []stats.Counter
-	var downCounterList []stats.Counter
+	var upCounterList []trafficSnapshot
+	var downCounterList []trafficSnapshot
 	AutoSpeedLimit := int64(c.config.AutoSpeedLimitConfig.Limit)
 	UpdatePeriodic := int64(c.config.UpdatePeriodic)
 	limitedUsers := make([]api.UserInfo, 0)
@@ -563,10 +561,10 @@ func (c *Controller) userInfoMonitor() (err error) {
 				Download: down})
 
 			if upCounter != nil {
-				upCounterList = append(upCounterList, upCounter)
+				upCounterList = append(upCounterList, trafficSnapshot{upCounter, up})
 			}
 			if downCounter != nil {
-				downCounterList = append(downCounterList, downCounter)
+				downCounterList = append(downCounterList, trafficSnapshot{downCounter, down})
 			}
 		} else {
 			delete(c.warnedUsers, user)
@@ -579,16 +577,10 @@ func (c *Controller) userInfoMonitor() (err error) {
 	}
 	if len(userTraffic) > 0 {
 		c.logger.Printf("Reporting %d user(s) traffic to panel; example: UID=%d up=%d down=%d", len(userTraffic), userTraffic[0].UID, userTraffic[0].Upload, userTraffic[0].Download)
-		var err error // Define an empty error
-		if !c.config.DisableUploadTraffic {
-			err = c.apiClient.ReportUserTraffic(&userTraffic)
-		}
-		// If report traffic error, not clear the traffic
-		if err != nil {
+		if err := c.reportTraffic(userTraffic, upCounterList, downCounterList); err != nil {
 			c.logger.Print(err)
-		} else {
-			c.resetTraffic(&upCounterList, &downCounterList)
 		}
+
 	}
 
 	// Report Online info
@@ -626,12 +618,12 @@ func (c *Controller) buildNodeTag() string {
 
 // Check Cert
 func (c *Controller) certMonitor() error {
-	if c.nodeInfo.EnableTLS && c.config.EnableREALITY == false {
+	if c.needsCertificateRenewal() {
 		switch c.config.CertConfig.CertMode {
 		case "dns", "http", "tls":
 			lego, err := mylego.New(c.config.CertConfig)
 			if err != nil {
-				c.logger.Print(err)
+				return fmt.Errorf("initialize certificate renewal: %w", err)
 			}
 			// Xray-core supports the OcspStapling certification hot renew
 			_, _, _, err = lego.RenewCert()
@@ -641,4 +633,22 @@ func (c *Controller) certMonitor() error {
 		}
 	}
 	return nil
+}
+
+func (c *Controller) needsCertificateRenewal() bool {
+	if c.nodeInfo == nil || !c.nodeInfo.EnableTLS || c.config.CertConfig == nil {
+		return false
+	}
+	if c.config.DisableLocalREALITYConfig {
+		if c.nodeInfo.EnableREALITY && c.nodeInfo.REALITYConfig != nil {
+			return false
+		}
+	} else if c.config.EnableREALITY && c.config.REALITYConfigs != nil {
+		return false
+	}
+	switch c.config.CertConfig.CertMode {
+	case "dns", "http", "tls":
+		return true
+	}
+	return false
 }

@@ -385,15 +385,19 @@ func (c *APIClient) parseV2rayNodeResponse(s *serverConfig) (*api.NodeInfo, erro
 	}
 
 	realityConfig := api.REALITYConfig{
-		Dest:             stdnet.JoinHostPort(strings.Trim(dest, "[]"), s.VlessTlsSettings.ServerPort),
-		ProxyProtocolVer: xVer,
-		ServerNames:      []string{s.VlessTlsSettings.Sni},
-		PrivateKey:       s.VlessTlsSettings.PrivateKey,
-		ShortIds:         []string{s.VlessTlsSettings.ShortId},
+		Target:                s.VlessTlsSettings.Target,
+		Mldsa65Seed:           s.VlessTlsSettings.Mldsa65Seed,
+		LimitFallbackUpload:   s.VlessTlsSettings.LimitFallbackUpload,
+		LimitFallbackDownload: s.VlessTlsSettings.LimitFallbackDownload,
+		Dest:                  stdnet.JoinHostPort(strings.Trim(dest, "[]"), s.VlessTlsSettings.ServerPort),
+		ProxyProtocolVer:      xVer,
+		ServerNames:           []string{s.VlessTlsSettings.Sni},
+		PrivateKey:            s.VlessTlsSettings.PrivateKey,
+		ShortIds:              []string{s.VlessTlsSettings.ShortId},
 	}
 
-	if c.EnableVless {
-		s.NetworkSettings = s.VlessNetworkSettings
+	if (c.EnableVless || c.NodeType == "Vless") && s.VlessNetworkSettings != nil {
+		s.NetworkSettings = *s.VlessNetworkSettings
 	}
 
 	switch s.Network {
@@ -414,7 +418,7 @@ func (c *APIClient) parseV2rayNodeResponse(s *serverConfig) (*api.NodeInfo, erro
 				header = httpHeader
 			}
 		}
-	case "httpupgrade", "splithttp":
+	case "httpupgrade", "splithttp", "xhttp":
 		if s.NetworkSettings.Headers != nil {
 			if httpHeaders, err := s.NetworkSettings.Headers.MarshalJSON(); err != nil {
 				return nil, err
@@ -447,6 +451,8 @@ func (c *APIClient) parseV2rayNodeResponse(s *serverConfig) (*api.NodeInfo, erro
 		Port:              uint32(s.ServerPort),
 		AlterID:           0,
 		TransportProtocol: s.Network,
+		XHTTPMode:         s.NetworkSettings.Mode,
+		XHTTPExtra:        s.NetworkSettings.Extra,
 		EnableTLS:         enableTLS,
 		Path:              s.NetworkSettings.Path,
 		Host:              host,

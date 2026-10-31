@@ -16,7 +16,9 @@ func OutboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.
 	outboundDetourConfig.Tag = tag
 
 	// SendThrough setting
-	outboundDetourConfig.SendThrough = &config.SendIP
+	if config.SendIP != "" {
+		outboundDetourConfig.SendThrough = &config.SendIP
+	}
 
 	// MuxConfig (multiplexing)
 	if config.MuxEnabled {
@@ -55,6 +57,7 @@ func OutboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.
 	}
 	proxySetting := &conf.FreedomConfig{
 		DomainStrategy: domainStrategy,
+		FinalRules:     config.FreedomFinalRules,
 	}
 	// TCP Fragment for anti-censorship
 	if config.FragmentPackets != "" {

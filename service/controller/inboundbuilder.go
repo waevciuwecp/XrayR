@@ -43,6 +43,7 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 		Enabled:         !config.DisableSniffing,
 		DestOverride:    conf.StringList{"http", "tls", "quic", "fakedns"},
 		DomainsExcluded: conf.StringList(config.SniffingDomainsExcluded),
+		IPsExcluded:     conf.StringList(config.SniffingIPsExcluded),
 		MetadataOnly:    config.SniffingMetadataOnly,
 		RouteOnly:       config.SniffingRouteOnly,
 	}
@@ -239,6 +240,13 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 			NoGRPCHeader: config.XHTTPNoGRPCHeader,
 			NoSSEHeader:  config.XHTTPNoSSEHeader,
 		}
+		splithttpSetting.Extra = nodeInfo.XHTTPExtra
+		if splithttpSetting.Mode == "" {
+			splithttpSetting.Mode = nodeInfo.XHTTPMode
+		}
+		if config.XHTTPExtraJSON != "" {
+			splithttpSetting.Extra = json.RawMessage(config.XHTTPExtraJSON)
+		}
 		if config.XHTTPPaddingBytes != nil {
 			splithttpSetting.XPaddingBytes = conf.Int32Range{
 				From: config.XHTTPPaddingBytes.From,
@@ -266,15 +274,18 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 
 			r := nodeInfo.REALITYConfig
 			realitySettings := &conf.REALITYConfig{
-				Show:         config.REALITYConfigs != nil && config.REALITYConfigs.Show,
-				Dest:         []byte(`"` + r.Dest + `"`),
-				Xver:         r.ProxyProtocolVer,
-				ServerNames:  r.ServerNames,
-				PrivateKey:   r.PrivateKey,
-				MinClientVer: r.MinClientVer,
-				MaxClientVer: r.MaxClientVer,
-				MaxTimeDiff:  r.MaxTimeDiff,
-				ShortIds:     r.ShortIds,
+				Show:                  config.REALITYConfigs != nil && config.REALITYConfigs.Show,
+				Dest:                  realityTarget(r.Target, r.Dest),
+				Mldsa65Seed:           r.Mldsa65Seed,
+				LimitFallbackUpload:   r.LimitFallbackUpload,
+				LimitFallbackDownload: r.LimitFallbackDownload,
+				Xver:                  r.ProxyProtocolVer,
+				ServerNames:           r.ServerNames,
+				PrivateKey:            r.PrivateKey,
+				MinClientVer:          r.MinClientVer,
+				MaxClientVer:          r.MaxClientVer,
+				MaxTimeDiff:           r.MaxTimeDiff,
+				ShortIds:              r.ShortIds,
 			}
 			if config.REALITYFingerprint != "" {
 				realitySettings.Fingerprint = config.REALITYFingerprint
@@ -295,15 +306,18 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 		streamSetting.Security = "reality"
 
 		realitySettings := &conf.REALITYConfig{
-			Show:         config.REALITYConfigs.Show,
-			Dest:         []byte(`"` + config.REALITYConfigs.Dest + `"`),
-			Xver:         config.REALITYConfigs.ProxyProtocolVer,
-			ServerNames:  config.REALITYConfigs.ServerNames,
-			PrivateKey:   config.REALITYConfigs.PrivateKey,
-			MinClientVer: config.REALITYConfigs.MinClientVer,
-			MaxClientVer: config.REALITYConfigs.MaxClientVer,
-			MaxTimeDiff:  config.REALITYConfigs.MaxTimeDiff,
-			ShortIds:     config.REALITYConfigs.ShortIds,
+			Show:                  config.REALITYConfigs.Show,
+			Dest:                  realityTarget(config.REALITYConfigs.Target, config.REALITYConfigs.Dest),
+			Mldsa65Seed:           config.REALITYConfigs.Mldsa65Seed,
+			LimitFallbackUpload:   config.REALITYConfigs.LimitFallbackUpload,
+			LimitFallbackDownload: config.REALITYConfigs.LimitFallbackDownload,
+			Xver:                  config.REALITYConfigs.ProxyProtocolVer,
+			ServerNames:           config.REALITYConfigs.ServerNames,
+			PrivateKey:            config.REALITYConfigs.PrivateKey,
+			MinClientVer:          config.REALITYConfigs.MinClientVer,
+			MaxClientVer:          config.REALITYConfigs.MaxClientVer,
+			MaxTimeDiff:           config.REALITYConfigs.MaxTimeDiff,
+			ShortIds:              config.REALITYConfigs.ShortIds,
 		}
 		if config.REALITYFingerprint != "" {
 			realitySettings.Fingerprint = config.REALITYFingerprint
@@ -320,6 +334,9 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 		streamSetting.REALITYSettings = realitySettings
 	}
 
+	if !isREALITY && nodeInfo.EnableTLS && config.CertConfig == nil {
+		return nil, fmt.Errorf("node %d: TLS requires CertConfig when REALITY is not enabled", nodeInfo.NodeID)
+	}
 	if !isREALITY && nodeInfo.EnableTLS && config.CertConfig.CertMode != "none" {
 		streamSetting.Security = "tls"
 		certFile, keyFile, err := getCertFile(config.CertConfig)
@@ -464,4 +481,12 @@ func buildTrojanFallbacks(fallbackConfigs []*FallBackConfig) ([]*conf.TrojanInbo
 		}
 	}
 	return trojanFallBacks, nil
+}
+
+func realityTarget(target, legacyDest string) json.RawMessage {
+	if target == "" {
+		target = legacyDest
+	}
+	value, _ := json.Marshal(target)
+	return value
 }
