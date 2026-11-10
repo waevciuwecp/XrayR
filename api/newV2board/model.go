@@ -8,7 +8,12 @@ import (
 type serverConfig struct {
 	shadowsocks
 	v2ray
-	trojan
+	hysteria
+
+	// These panel fields are shared across protocol-specific payloads.
+	Obfs       string `json:"obfs"`
+	Host       string `json:"host"`
+	ServerName string `json:"server_name"`
 
 	ServerPort int `json:"server_port"`
 	BaseConfig struct {
@@ -20,7 +25,6 @@ type serverConfig struct {
 
 type shadowsocks struct {
 	Cipher       string `json:"cipher"`
-	Obfs         string `json:"obfs"`
 	ObfsSettings struct {
 		Path string `json:"path"`
 		Host string `json:"host"`
@@ -49,9 +53,11 @@ type v2ray struct {
 	Tls int `json:"tls"`
 }
 
-type trojan struct {
-	Host       string `json:"host"`
-	ServerName string `json:"server_name"`
+type hysteria struct {
+	Version      int    `json:"version"`
+	UpMbps       int    `json:"up_mbps"`
+	DownMbps     int    `json:"down_mbps"`
+	ObfsPassword string `json:"obfs-password"`
 }
 
 type route struct {

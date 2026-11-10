@@ -189,6 +189,8 @@ func (c *APIClient) GetNodeInfo() (nodeInfo *api.NodeInfo, err error) {
 		nodeInfo, err = c.parseV2rayNodeResponse(server)
 	case "Trojan":
 		nodeInfo, err = c.parseTrojanNodeResponse(server)
+	case "Hysteria", "Hysteria2":
+		nodeInfo, err = c.parseHysteriaNodeResponse(server)
 	case "Shadowsocks":
 		nodeInfo, err = c.parseSSNodeResponse(server)
 	default:
@@ -208,7 +210,7 @@ func (c *APIClient) GetUserList() (UserList *[]api.UserInfo, err error) {
 	path := "/api/v1/server/UniProxy/user"
 
 	switch c.NodeType {
-	case "V2ray", "Trojan", "Shadowsocks", "Vmess", "Vless":
+	case "V2ray", "Trojan", "Shadowsocks", "Vmess", "Vless", "Hysteria", "Hysteria2":
 		break
 	default:
 		return nil, fmt.Errorf("unsupported node type: %s", c.NodeType)
@@ -329,6 +331,29 @@ func (c *APIClient) parseTrojanNodeResponse(s *serverConfig) (*api.NodeInfo, err
 		NameServerConfig:  s.parseDNSConfig(),
 	}
 	return nodeInfo, nil
+}
+
+func (c *APIClient) parseHysteriaNodeResponse(s *serverConfig) (*api.NodeInfo, error) {
+	if s.Version != 2 {
+		return nil, fmt.Errorf("node %d: only Hysteria 2 (version=2) is supported", c.NodeID)
+	}
+	if s.ServerPort <= 0 || s.ServerPort > 65535 {
+		return nil, fmt.Errorf("node %d: invalid server_port", c.NodeID)
+	}
+	if s.Obfs != "" {
+		return nil, fmt.Errorf("node %d: Xray-core does not support Hysteria 2 obfs; disable obfs in the panel", c.NodeID)
+	}
+
+	return &api.NodeInfo{
+		NodeType:          "Hysteria",
+		NodeID:            c.NodeID,
+		Port:              uint32(s.ServerPort),
+		TransportProtocol: "hysteria",
+		EnableTLS:         true,
+		Host:              s.Host,
+		ServiceName:       s.ServerName,
+		NameServerConfig:  s.parseDNSConfig(),
+	}, nil
 }
 
 // parseSSNodeResponse parse the response for the given nodeInfo format

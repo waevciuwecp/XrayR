@@ -267,6 +267,10 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 
 	// Build TLS and REALITY settings
 	var isREALITY bool
+	// Hysteria 2 requires TLS over QUIC and cannot use REALITY.
+	if nodeInfo.NodeType == "Hysteria" && nodeInfo.EnableREALITY {
+		return nil, fmt.Errorf("node %d: Hysteria 2 does not support REALITY", nodeInfo.NodeID)
+	}
 	if config.DisableLocalREALITYConfig {
 		if nodeInfo.REALITYConfig != nil && nodeInfo.EnableREALITY {
 			isREALITY = true
@@ -301,7 +305,7 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 			}
 			streamSetting.REALITYSettings = realitySettings
 		}
-	} else if config.EnableREALITY && config.REALITYConfigs != nil {
+	} else if config.EnableREALITY && config.REALITYConfigs != nil && nodeInfo.NodeType != "Hysteria" {
 		isREALITY = true
 		streamSetting.Security = "reality"
 
@@ -337,6 +341,9 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 	if !isREALITY && nodeInfo.EnableTLS && config.CertConfig == nil {
 		return nil, fmt.Errorf("node %d: TLS requires CertConfig when REALITY is not enabled", nodeInfo.NodeID)
 	}
+	if !isREALITY && nodeInfo.NodeType == "Hysteria" && nodeInfo.EnableTLS && config.CertConfig.CertMode == "none" {
+		return nil, fmt.Errorf("node %d: Hysteria 2 requires TLS certificates; CertMode cannot be none", nodeInfo.NodeID)
+	}
 	if !isREALITY && nodeInfo.EnableTLS && config.CertConfig.CertMode != "none" {
 		streamSetting.Security = "tls"
 		certFile, keyFile, err := getCertFile(config.CertConfig)
@@ -349,8 +356,12 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 		if config.TLSFingerprint != "" {
 			tlsSettings.Fingerprint = config.TLSFingerprint
 		}
-		if config.TLSAlpn != "" {
-			alpnList := conf.StringList{config.TLSAlpn}
+		alpn := config.TLSAlpn
+		if nodeInfo.NodeType == "Hysteria" {
+			alpn = "h3"
+		}
+		if alpn != "" {
+			alpnList := conf.StringList{alpn}
 			tlsSettings.ALPN = &alpnList
 		}
 		tlsSettings.Certs = append(tlsSettings.Certs, &conf.TLSCertConfig{CertFile: certFile, KeyFile: keyFile, OcspStapling: 3600})
