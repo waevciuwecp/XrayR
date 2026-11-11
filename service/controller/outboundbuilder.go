@@ -20,16 +20,6 @@ func OutboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.
 		outboundDetourConfig.SendThrough = &config.SendIP
 	}
 
-	// MuxConfig (multiplexing)
-	if config.MuxEnabled {
-		outboundDetourConfig.MuxSettings = &conf.MuxConfig{
-			Enabled:         config.MuxEnabled,
-			Concurrency:     config.MuxConcurrency,
-			XudpConcurrency: config.MuxXudpConcurrency,
-			XudpProxyUDP443: config.MuxXudpProxyUDP443,
-		}
-	}
-
 	if nodeInfo.NodeType == "Loopback" {
 		outboundDetourConfig.Protocol = "loopback"
 		proxySetting := &conf.LoopbackConfig{

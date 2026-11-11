@@ -200,6 +200,7 @@ func (c *APIClient) GetNodeInfo() (nodeInfo *api.NodeInfo, err error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse node info failed: %s, \nError: %v", res.String(), err)
 	}
+	nodeInfo.Multiplex = server.Multiplex
 
 	return nodeInfo, nil
 }

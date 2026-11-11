@@ -77,6 +77,7 @@ func New(server *core.Instance, api api.API, config *Config, panelType string) *
 // Start implement the Start() function of the service interface
 func (c *Controller) Start() error {
 	c.clientInfo = c.apiClient.Describe()
+	c.warnLegacyOutboundMux()
 	// First fetch Node Info
 	newNodeInfo, err := c.apiClient.GetNodeInfo()
 	if err != nil {
@@ -86,6 +87,7 @@ func (c *Controller) Start() error {
 		return errors.New("server port must > 0")
 	}
 	c.nodeInfo = newNodeInfo
+	c.logPanelMultiplex(nil, newNodeInfo)
 	c.Tag = c.buildNodeTag()
 
 	// Add new tag
@@ -220,6 +222,7 @@ func (c *Controller) nodeInfoMonitor() (err error) {
 	// If nodeInfo changed
 	if nodeInfoChanged {
 		if !reflect.DeepEqual(c.nodeInfo, newNodeInfo) {
+			previousNodeInfo := c.nodeInfo
 			// Remove old tag
 			oldTag := c.Tag
 			err := c.removeOldTag(oldTag)
@@ -242,6 +245,7 @@ func (c *Controller) nodeInfoMonitor() (err error) {
 				c.logger.Print(err)
 				return nil
 			}
+			c.logPanelMultiplex(previousNodeInfo, newNodeInfo)
 			nodeInfoChanged = true
 			// Remove Old limiter
 			if err = c.DeleteInboundLimiter(oldTag); err != nil {

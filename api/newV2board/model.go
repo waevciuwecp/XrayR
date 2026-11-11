@@ -2,6 +2,8 @@ package newV2board
 
 import (
 	"encoding/json"
+
+	"github.com/XrayR-project/XrayR/api"
 	"github.com/xtls/xray-core/infra/conf"
 )
 
@@ -11,9 +13,10 @@ type serverConfig struct {
 	hysteria
 
 	// These panel fields are shared across protocol-specific payloads.
-	Obfs       string `json:"obfs"`
-	Host       string `json:"host"`
-	ServerName string `json:"server_name"`
+	Obfs       string               `json:"obfs"`
+	Host       string               `json:"host"`
+	ServerName string               `json:"server_name"`
+	Multiplex  *api.MultiplexConfig `json:"multiplex"`
 
 	ServerPort int `json:"server_port"`
 	BaseConfig struct {

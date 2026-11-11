@@ -49,6 +49,7 @@ type NodeInfo struct {
 	TransportProtocol   string
 	ObfsType            string
 	ObfsPassword        string
+	Multiplex           *MultiplexConfig
 	FakeType            string
 	Host                string
 	Path                string
@@ -83,6 +84,24 @@ type NodeInfo struct {
 	Security            string
 	Key                 string
 	RejectUnknownSni    bool
+}
+
+// MultiplexConfig is the panel-side client subscription multiplex setting.
+// XrayR retains it for reporting; it is not an inbound configuration.
+type MultiplexConfig struct {
+	Enabled        bool                   `json:"enabled"`
+	Protocol       string                 `json:"protocol"`
+	MaxConnections int                    `json:"max_connections"`
+	MinStreams     int                    `json:"min_streams"`
+	MaxStreams     int                    `json:"max_streams"`
+	Padding        bool                   `json:"padding"`
+	Brutal         *MultiplexBrutalConfig `json:"brutal"`
+}
+
+type MultiplexBrutalConfig struct {
+	Enabled  bool `json:"enabled"`
+	UpMbps   int  `json:"up_mbps"`
+	DownMbps int  `json:"down_mbps"`
 }
 
 type UserInfo struct {
