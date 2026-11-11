@@ -61,15 +61,20 @@ func TestHysteria2PanelContract(t *testing.T) {
 	}
 }
 
-func TestHysteria2RejectsUnsupportedPanelSettings(t *testing.T) {
+func TestHysteria2ObfsPanelSettings(t *testing.T) {
 	tests := []struct {
-		name string
-		body string
-		want string
+		name         string
+		body         string
+		wantErr      string
+		wantObfsType string
+		wantPassword string
 	}{
-		{name: "v1", body: `{"server_port":443,"version":1}`, want: "only Hysteria 2"},
-		{name: "obfs", body: `{"server_port":443,"version":2,"obfs":"salamander"}`, want: "does not support Hysteria 2 obfs"},
-		{name: "invalid port", body: `{"server_port":65536,"version":2}`, want: "invalid server_port"},
+		{name: "v1", body: `{"server_port":443,"version":1}`, wantErr: "only Hysteria 2"},
+		{name: "salamander", body: `{"server_port":443,"version":2,"obfs":"salamander","obfs-password":"long-enough-password"}`, wantObfsType: "salamander", wantPassword: "long-enough-password"},
+		{name: "obfs disabled with retained password", body: `{"server_port":443,"version":2,"obfs":null,"obfs-password":"stale-password"}`},
+		{name: "short salamander password", body: `{"server_port":443,"version":2,"obfs":"salamander","obfs-password":"abc"}`, wantErr: "at least 4 bytes"},
+		{name: "unsupported obfs", body: `{"server_port":443,"version":2,"obfs":"gecko"}`, wantErr: `unsupported Hysteria 2 obfs "gecko"`},
+		{name: "invalid port", body: `{"server_port":65536,"version":2}`, wantErr: "invalid server_port"},
 	}
 
 	for _, tt := range tests {
@@ -78,9 +83,18 @@ func TestHysteria2RejectsUnsupportedPanelSettings(t *testing.T) {
 			if err := json.Unmarshal([]byte(tt.body), &response); err != nil {
 				t.Fatal(err)
 			}
-			_, err := (&APIClient{NodeID: 1}).parseHysteriaNodeResponse(&response)
-			if err == nil || !strings.Contains(err.Error(), tt.want) {
-				t.Fatalf("got error %v, want containing %q", err, tt.want)
+			node, err := (&APIClient{NodeID: 1}).parseHysteriaNodeResponse(&response)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("got error %v, want containing %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseHysteriaNodeResponse: %v", err)
+			}
+			if node.ObfsType != tt.wantObfsType || node.ObfsPassword != tt.wantPassword {
+				t.Fatalf("got obfs type/password %q/%q, want %q/%q", node.ObfsType, node.ObfsPassword, tt.wantObfsType, tt.wantPassword)
 			}
 		})
 	}

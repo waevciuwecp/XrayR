@@ -47,6 +47,8 @@ type NodeInfo struct {
 	XHTTPMode           string
 	XHTTPExtra          json.RawMessage
 	TransportProtocol   string
+	ObfsType            string
+	ObfsPassword        string
 	FakeType            string
 	Host                string
 	Path                string

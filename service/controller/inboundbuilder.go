@@ -393,17 +393,62 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 	}
 
 	// FinalMask
-	if config.FinalMaskJSON != "" {
-		finalMask := &conf.FinalMask{}
-		if err := json.Unmarshal([]byte(config.FinalMaskJSON), finalMask); err != nil {
-			return nil, fmt.Errorf("parse FinalMaskJSON failed: %s", err)
-		}
-		streamSetting.FinalMask = finalMask
+	finalMask, err := buildFinalMask(config, nodeInfo)
+	if err != nil {
+		return nil, err
 	}
+	streamSetting.FinalMask = finalMask
 
 	inboundDetourConfig.StreamSetting = streamSetting
 
 	return inboundDetourConfig.Build()
+}
+
+func buildFinalMask(config *Config, nodeInfo *api.NodeInfo) (*conf.FinalMask, error) {
+	var finalMask *conf.FinalMask
+	if config.FinalMaskJSON != "" {
+		finalMask = &conf.FinalMask{}
+		if err := json.Unmarshal([]byte(config.FinalMaskJSON), finalMask); err != nil {
+			return nil, fmt.Errorf("parse FinalMaskJSON failed: %w", err)
+		}
+	}
+
+	if nodeInfo.NodeType != "Hysteria" {
+		return finalMask, nil
+	}
+	switch strings.ToLower(nodeInfo.ObfsType) {
+	case "":
+		return finalMask, nil
+	case "salamander":
+		if len(nodeInfo.ObfsPassword) < 4 {
+			return nil, fmt.Errorf("node %d: Hysteria 2 salamander password must be at least 4 bytes", nodeInfo.NodeID)
+		}
+	default:
+		return nil, fmt.Errorf("node %d: unsupported Hysteria 2 obfs %q (supported: salamander)", nodeInfo.NodeID, nodeInfo.ObfsType)
+	}
+
+	passwordJSON, err := json.Marshal(struct {
+		Password string `json:"password"`
+	}{Password: nodeInfo.ObfsPassword})
+	if err != nil {
+		return nil, fmt.Errorf("node %d: encode Hysteria 2 obfs settings: %w", nodeInfo.NodeID, err)
+	}
+	settings := json.RawMessage(passwordJSON)
+	if finalMask == nil {
+		finalMask = &conf.FinalMask{}
+	}
+	mask := conf.Mask{Type: "salamander", Settings: &settings}
+	insertAt := len(finalMask.Udp)
+	for i, existing := range finalMask.Udp {
+		if strings.EqualFold(existing.Type, "filter") {
+			insertAt = i
+			break
+		}
+	}
+	finalMask.Udp = append(finalMask.Udp, conf.Mask{})
+	copy(finalMask.Udp[insertAt+1:], finalMask.Udp[insertAt:])
+	finalMask.Udp[insertAt] = mask
+	return finalMask, nil
 }
 
 func getCertFile(certConfig *mylego.CertConfig) (certFile string, keyFile string, err error) {

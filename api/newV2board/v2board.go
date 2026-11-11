@@ -340,8 +340,17 @@ func (c *APIClient) parseHysteriaNodeResponse(s *serverConfig) (*api.NodeInfo, e
 	if s.ServerPort <= 0 || s.ServerPort > 65535 {
 		return nil, fmt.Errorf("node %d: invalid server_port", c.NodeID)
 	}
-	if s.Obfs != "" {
-		return nil, fmt.Errorf("node %d: Xray-core does not support Hysteria 2 obfs; disable obfs in the panel", c.NodeID)
+	var obfsPassword string
+	switch strings.ToLower(strings.TrimSpace(s.Obfs)) {
+	case "":
+		// Xboard may retain obfs-password when obfs is disabled. Use obfs as the switch.
+	case "salamander":
+		if len(s.ObfsPassword) < 4 {
+			return nil, fmt.Errorf("node %d: Hysteria 2 salamander password must be at least 4 bytes", c.NodeID)
+		}
+		obfsPassword = s.ObfsPassword
+	default:
+		return nil, fmt.Errorf("node %d: unsupported Hysteria 2 obfs %q (supported: salamander)", c.NodeID, s.Obfs)
 	}
 
 	return &api.NodeInfo{
@@ -349,6 +358,8 @@ func (c *APIClient) parseHysteriaNodeResponse(s *serverConfig) (*api.NodeInfo, e
 		NodeID:            c.NodeID,
 		Port:              uint32(s.ServerPort),
 		TransportProtocol: "hysteria",
+		ObfsType:          strings.ToLower(strings.TrimSpace(s.Obfs)),
+		ObfsPassword:      obfsPassword,
 		EnableTLS:         true,
 		Host:              s.Host,
 		ServiceName:       s.ServerName,
