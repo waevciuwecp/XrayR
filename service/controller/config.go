@@ -73,7 +73,8 @@ type Config struct {
 	// FinalMask JSON config (raw JSON matching Xray-core FinalMask structure)
 	FinalMaskJSON string `mapstructure:"FinalMaskJSON"`
 
-	// MuxConfig (multiplexing)
+	// Legacy global mux settings are retained for config compatibility. XrayR's
+	// generated outbounds are freedom/loopback and do not apply these settings.
 	MuxEnabled         bool   `mapstructure:"MuxEnabled"`
 	MuxConcurrency     int16  `mapstructure:"MuxConcurrency"`
 	MuxXudpConcurrency int16  `mapstructure:"MuxXudpConcurrency"`
