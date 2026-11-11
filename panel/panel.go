@@ -2,6 +2,7 @@ package panel
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -184,8 +185,23 @@ func (p *Panel) Start() (err error) {
 	}
 	p.Server = server
 
-	// Load Nodes config
+	// Load node configs independently so one bad panel entry cannot block others.
+	var nodeServices []nodeServiceEntry
+	var failures []error
 	for _, nodeConfig := range p.panelConfig.NodesConfig {
+		if nodeConfig == nil {
+			failure := errors.New("node config is nil")
+			log.Error(failure)
+			failures = append(failures, failure)
+			continue
+		}
+		if nodeConfig.ApiConfig == nil {
+			failure := fmt.Errorf("node config for panel %q has no ApiConfig", nodeConfig.PanelType)
+			log.Error(failure)
+			failures = append(failures, failure)
+			continue
+		}
+
 		var apiClient api.API
 		switch nodeConfig.PanelType {
 		case "SSpanel":
@@ -203,30 +219,64 @@ func (p *Panel) Start() (err error) {
 		case "BunPanel":
 			apiClient = bunpanel.New(nodeConfig.ApiConfig)
 		default:
-			return fmt.Errorf("unsupported panel type: %s", nodeConfig.PanelType)
+			failure := fmt.Errorf("node %d: unsupported panel type: %s", nodeConfig.ApiConfig.NodeID, nodeConfig.PanelType)
+			log.Error(failure)
+			failures = append(failures, failure)
+			continue
 		}
-		var controllerService service.Service
-		// Register controller service
+
 		controllerConfig := getDefaultControllerConfig()
 		if nodeConfig.ControllerConfig != nil {
 			if err := mergo.Merge(controllerConfig, nodeConfig.ControllerConfig, mergo.WithOverride); err != nil {
-				return fmt.Errorf("read controller config: %w", err)
+				failure := fmt.Errorf("node %d: read controller config: %w", nodeConfig.ApiConfig.NodeID, err)
+				log.Error(failure)
+				failures = append(failures, failure)
+				continue
 			}
 		}
-		controllerService = controller.New(server, apiClient, controllerConfig, nodeConfig.PanelType)
-		p.Service = append(p.Service, controllerService)
-
+		nodeServices = append(nodeServices, nodeServiceEntry{
+			nodeID:  nodeConfig.ApiConfig.NodeID,
+			service: controller.New(server, apiClient, controllerConfig, nodeConfig.PanelType),
+		})
 	}
 
-	// Start all the service
-	for _, s := range p.Service {
-		err := s.Start()
-		if err != nil {
-			return fmt.Errorf("panel start failed: %w", err)
+	// Start valid node services and keep the successful ones if another node fails.
+	startedServices, startFailures := startNodeServices(nodeServices)
+	p.Service = startedServices
+	failures = append(failures, startFailures...)
+	if configured := len(p.panelConfig.NodesConfig); configured > 0 && len(p.Service) == 0 {
+		if len(failures) == 0 {
+			return fmt.Errorf("panel start failed: all %d configured nodes failed", configured)
 		}
+		return fmt.Errorf("panel start failed: all %d configured nodes failed: %w", configured, errors.Join(failures...))
 	}
 	p.Running = true
 	return
+}
+
+type nodeServiceEntry struct {
+	nodeID  int
+	service service.Service
+}
+
+func startNodeServices(nodes []nodeServiceEntry) ([]service.Service, []error) {
+	started := make([]service.Service, 0, len(nodes))
+	var failures []error
+	for _, node := range nodes {
+		if err := node.service.Start(); err != nil {
+			failure := fmt.Errorf("node %d service start failed, skipping: %w", node.nodeID, err)
+			log.Error(failure)
+			failures = append(failures, failure)
+			if closeErr := node.service.Close(); closeErr != nil {
+				closeFailure := fmt.Errorf("node %d service cleanup failed: %w", node.nodeID, closeErr)
+				log.Error(closeFailure)
+				failures = append(failures, closeFailure)
+			}
+			continue
+		}
+		started = append(started, node.service)
+	}
+	return started, failures
 }
 
 // Close the panel
