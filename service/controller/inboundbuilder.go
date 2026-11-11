@@ -267,6 +267,10 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 
 	// Build TLS and REALITY settings
 	var isREALITY bool
+	// Hysteria 2 requires TLS over QUIC and cannot use REALITY.
+	if nodeInfo.NodeType == "Hysteria" && nodeInfo.EnableREALITY {
+		return nil, fmt.Errorf("node %d: Hysteria 2 does not support REALITY", nodeInfo.NodeID)
+	}
 	if config.DisableLocalREALITYConfig {
 		if nodeInfo.REALITYConfig != nil && nodeInfo.EnableREALITY {
 			isREALITY = true
@@ -301,7 +305,7 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 			}
 			streamSetting.REALITYSettings = realitySettings
 		}
-	} else if config.EnableREALITY && config.REALITYConfigs != nil {
+	} else if config.EnableREALITY && config.REALITYConfigs != nil && nodeInfo.NodeType != "Hysteria" {
 		isREALITY = true
 		streamSetting.Security = "reality"
 
@@ -337,6 +341,9 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 	if !isREALITY && nodeInfo.EnableTLS && config.CertConfig == nil {
 		return nil, fmt.Errorf("node %d: TLS requires CertConfig when REALITY is not enabled", nodeInfo.NodeID)
 	}
+	if !isREALITY && nodeInfo.NodeType == "Hysteria" && nodeInfo.EnableTLS && config.CertConfig.CertMode == "none" {
+		return nil, fmt.Errorf("node %d: Hysteria 2 requires TLS certificates; CertMode cannot be none", nodeInfo.NodeID)
+	}
 	if !isREALITY && nodeInfo.EnableTLS && config.CertConfig.CertMode != "none" {
 		streamSetting.Security = "tls"
 		certFile, keyFile, err := getCertFile(config.CertConfig)
@@ -349,8 +356,12 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 		if config.TLSFingerprint != "" {
 			tlsSettings.Fingerprint = config.TLSFingerprint
 		}
-		if config.TLSAlpn != "" {
-			alpnList := conf.StringList{config.TLSAlpn}
+		alpn := config.TLSAlpn
+		if nodeInfo.NodeType == "Hysteria" {
+			alpn = "h3"
+		}
+		if alpn != "" {
+			alpnList := conf.StringList{alpn}
 			tlsSettings.ALPN = &alpnList
 		}
 		tlsSettings.Certs = append(tlsSettings.Certs, &conf.TLSCertConfig{CertFile: certFile, KeyFile: keyFile, OcspStapling: 3600})
@@ -382,17 +393,62 @@ func InboundBuilder(config *Config, nodeInfo *api.NodeInfo, tag string) (*core.I
 	}
 
 	// FinalMask
-	if config.FinalMaskJSON != "" {
-		finalMask := &conf.FinalMask{}
-		if err := json.Unmarshal([]byte(config.FinalMaskJSON), finalMask); err != nil {
-			return nil, fmt.Errorf("parse FinalMaskJSON failed: %s", err)
-		}
-		streamSetting.FinalMask = finalMask
+	finalMask, err := buildFinalMask(config, nodeInfo)
+	if err != nil {
+		return nil, err
 	}
+	streamSetting.FinalMask = finalMask
 
 	inboundDetourConfig.StreamSetting = streamSetting
 
 	return inboundDetourConfig.Build()
+}
+
+func buildFinalMask(config *Config, nodeInfo *api.NodeInfo) (*conf.FinalMask, error) {
+	var finalMask *conf.FinalMask
+	if config.FinalMaskJSON != "" {
+		finalMask = &conf.FinalMask{}
+		if err := json.Unmarshal([]byte(config.FinalMaskJSON), finalMask); err != nil {
+			return nil, fmt.Errorf("parse FinalMaskJSON failed: %w", err)
+		}
+	}
+
+	if nodeInfo.NodeType != "Hysteria" {
+		return finalMask, nil
+	}
+	switch strings.ToLower(nodeInfo.ObfsType) {
+	case "":
+		return finalMask, nil
+	case "salamander":
+		if len(nodeInfo.ObfsPassword) < 4 {
+			return nil, fmt.Errorf("node %d: Hysteria 2 salamander password must be at least 4 bytes", nodeInfo.NodeID)
+		}
+	default:
+		return nil, fmt.Errorf("node %d: unsupported Hysteria 2 obfs %q (supported: salamander)", nodeInfo.NodeID, nodeInfo.ObfsType)
+	}
+
+	passwordJSON, err := json.Marshal(struct {
+		Password string `json:"password"`
+	}{Password: nodeInfo.ObfsPassword})
+	if err != nil {
+		return nil, fmt.Errorf("node %d: encode Hysteria 2 obfs settings: %w", nodeInfo.NodeID, err)
+	}
+	settings := json.RawMessage(passwordJSON)
+	if finalMask == nil {
+		finalMask = &conf.FinalMask{}
+	}
+	mask := conf.Mask{Type: "salamander", Settings: &settings}
+	insertAt := len(finalMask.Udp)
+	for i, existing := range finalMask.Udp {
+		if strings.EqualFold(existing.Type, "filter") {
+			insertAt = i
+			break
+		}
+	}
+	finalMask.Udp = append(finalMask.Udp, conf.Mask{})
+	copy(finalMask.Udp[insertAt+1:], finalMask.Udp[insertAt:])
+	finalMask.Udp[insertAt] = mask
+	return finalMask, nil
 }
 
 func getCertFile(certConfig *mylego.CertConfig) (certFile string, keyFile string, err error) {
